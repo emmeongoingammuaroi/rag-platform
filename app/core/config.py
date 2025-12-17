@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    PROJECT_NAME: str = "AI RAG API"
+    PROJECT_NAME: str = "RAG Platform"
     VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
