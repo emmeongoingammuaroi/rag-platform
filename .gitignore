@@ -51,6 +51,7 @@ logs/
 .coverage
 htmlcov/
 .tox/
+.mypy_cache/
 
 # Alembic
 alembic/versions/*.pyc
