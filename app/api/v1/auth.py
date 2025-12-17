@@ -2,8 +2,8 @@
 Authentication endpoints for login and registration.
 """
 
-from uuid import UUID
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
