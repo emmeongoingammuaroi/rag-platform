@@ -1,6 +1,6 @@
-# AI RAG API
+# RAG Platform API
 
-Production-ready FastAPI backend with AI capabilities, vector database integration, and RAG (Retrieval-Augmented Generation) support.
+Production-ready FastAPI backend with AI capabilities, vector database integration, and Retrieval-Augmented Generation (RAG) support.
 
 ## Features
 
