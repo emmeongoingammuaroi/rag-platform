@@ -2,6 +2,8 @@
 Pydantic schemas for AI endpoints.
 """
 
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
@@ -66,7 +68,7 @@ class SemanticSearchRequest(BaseModel):
 class SearchResult(BaseModel):
     """Single search result schema."""
 
-    document_id: int
+    document_id: UUID
     title: str
     content: str
     score: float

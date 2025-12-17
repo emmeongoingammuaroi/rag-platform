@@ -3,6 +3,7 @@ Pydantic schemas for Document model.
 """
 
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -30,10 +31,10 @@ class DocumentUpdate(BaseModel):
 class DocumentInDB(DocumentBase):
     """Schema for document in database."""
 
-    id: int
+    id: UUID
     file_path: str | None
     file_type: str | None
-    user_id: int
+    user_id: UUID
     chunk_count: int
     embedding_status: str
     created_at: datetime

@@ -4,6 +4,7 @@ AI endpoints for chat and embeddings.
 
 import logging
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -223,15 +224,26 @@ async def semantic_search(
         )
 
         # Format results
-        results = [
-            SearchResult(
-                document_id=result["payload"].get("document_id", 0),
-                title=result["payload"].get("title", "Unknown"),
-                content=result["payload"].get("content", ""),
-                score=result["score"],
+        results = []
+        for result in search_results:
+            payload = result.get("payload") or {}
+            raw_document_id = payload.get("document_id")
+            if not raw_document_id:
+                continue
+
+            try:
+                document_id = UUID(str(raw_document_id))
+            except ValueError:
+                continue
+
+            results.append(
+                SearchResult(
+                    document_id=document_id,
+                    title=payload.get("title", "Unknown"),
+                    content=payload.get("content", ""),
+                    score=result["score"],
+                )
             )
-            for result in search_results
-        ]
 
         return SemanticSearchResponse(
             results=results,

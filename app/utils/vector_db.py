@@ -4,6 +4,7 @@ Vector database utilities using Qdrant.
 
 import logging
 from typing import Any
+from uuid import UUID, uuid4
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
@@ -48,7 +49,7 @@ class VectorDB:
         self,
         vectors: list[list[float]],
         payloads: list[dict[str, Any]],
-        ids: list[int] | None = None,
+        ids: list[str] | None = None,
     ) -> None:
         """
         Upsert vectors into collection.
@@ -59,7 +60,7 @@ class VectorDB:
             ids: Optional list of IDs (auto-generated if not provided)
         """
         if ids is None:
-            ids = list(range(len(vectors)))
+            ids = [str(uuid4()) for _ in vectors]
 
         points = [
             PointStruct(id=id_, vector=vector, payload=payload)
@@ -105,7 +106,7 @@ class VectorDB:
             for result in results
         ]
 
-    def delete_by_document_id(self, document_id: int) -> None:
+    def delete_by_document_id(self, document_id: UUID) -> None:
         """
         Delete all vectors for a document.
 
@@ -115,7 +116,7 @@ class VectorDB:
         self.client.delete(
             collection_name=self.collection_name,
             points_selector={
-                "filter": {"must": [{"key": "document_id", "match": {"value": document_id}}]}
+                "filter": {"must": [{"key": "document_id", "match": {"value": str(document_id)}}]}
             },
         )
         logger.info(f"Deleted vectors for document_id: {document_id}")

@@ -2,6 +2,8 @@
 User service for business logic.
 """
 
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +16,7 @@ class UserService:
     """User service with repository pattern."""
 
     @staticmethod
-    async def get_by_id(db: AsyncSession, user_id: int) -> User | None:
+    async def get_by_id(db: AsyncSession, user_id: UUID) -> User | None:
         """Get user by ID."""
         result = await db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()

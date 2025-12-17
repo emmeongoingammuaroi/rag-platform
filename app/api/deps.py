@@ -2,6 +2,7 @@
 API dependencies for dependency injection.
 """
 
+from uuid import UUID
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -45,8 +46,13 @@ async def get_current_user(
     if user_id is None:
         raise credentials_exception
 
+    try:
+        user_uuid = UUID(user_id)
+    except ValueError:
+        raise credentials_exception
+
     # Get user from database
-    user = await UserService.get_by_id(db, int(user_id))
+    user = await UserService.get_by_id(db, user_uuid)
     if user is None:
         raise credentials_exception
 

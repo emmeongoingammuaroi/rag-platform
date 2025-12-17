@@ -3,9 +3,8 @@ AI service for LLM and embedding operations.
 """
 
 import logging
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
-import openai
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -33,7 +32,7 @@ class AIService:
         temperature: float = 0.7,
         max_tokens: int | None = None,
         model: str | None = None,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Generate chat completion.
 

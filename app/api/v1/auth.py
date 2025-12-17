@@ -2,6 +2,7 @@
 Authentication endpoints for login and registration.
 """
 
+from uuid import UUID
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -126,8 +127,17 @@ async def refresh_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    try:
+        user_uuid = UUID(user_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # Get user
-    user = await UserService.get_by_id(db, int(user_id))
+    user = await UserService.get_by_id(db, user_uuid)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

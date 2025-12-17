@@ -3,6 +3,7 @@ Pydantic schemas for User model.
 """
 
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -33,7 +34,7 @@ class UserUpdate(BaseModel):
 class UserInDB(UserBase):
     """Schema for user in database."""
 
-    id: int
+    id: UUID
     is_active: bool
     is_superuser: bool
     created_at: datetime
