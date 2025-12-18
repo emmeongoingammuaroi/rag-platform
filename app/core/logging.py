@@ -44,6 +44,7 @@ def setup_logging() -> None:
     console_handler.setLevel(log_level)
 
     # Format based on settings
+    formatter: logging.Formatter
     if settings.LOG_FORMAT == "json":
         formatter = CustomJsonFormatter(
             "%(timestamp)s %(level)s %(name)s %(message)s",
@@ -59,7 +60,7 @@ def setup_logging() -> None:
     root_logger.addHandler(console_handler)
 
     # Suppress noisy loggers
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").setLevel(log_level)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
