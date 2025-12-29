@@ -1,4 +1,4 @@
-.PHONY: help install dev-install format lint test clean docker-build docker-up docker-down migrate
+.PHONY: help install dev-install format lint test clean docker-build docker-up docker-down migrate run celery-worker
 
 help:
 	@echo "Available commands:"
@@ -13,6 +13,7 @@ help:
 	@echo "  make docker-down   - Stop Docker services"
 	@echo "  make migrate       - Run database migrations"
 	@echo "  make run           - Run development server"
+	@echo "  make celery-worker - Run Celery worker (document indexing)"
 
 install:
 	pip install -r requirements.txt
@@ -31,6 +32,12 @@ lint:
 
 test:
 	pytest
+
+run:
+	uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+
+celery-worker:
+	celery -A app.core.celery_app.celery_app worker -l info
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
