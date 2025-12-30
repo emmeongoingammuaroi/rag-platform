@@ -7,7 +7,15 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    FilterSelector,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 
 from app.core.config import settings
 
@@ -113,11 +121,19 @@ class VectorDB:
         Args:
             document_id: Document ID to delete vectors for
         """
+        selector = FilterSelector(
+            filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="document_id",
+                        match=MatchValue(value=str(document_id)),
+                    )
+                ]
+            )
+        )
         self.client.delete(
             collection_name=self.collection_name,
-            points_selector={
-                "filter": {"must": [{"key": "document_id", "match": {"value": str(document_id)}}]}
-            },
+            points_selector=selector,
         )
         logger.info(f"Deleted vectors for document_id: {document_id}")
 

@@ -67,3 +67,6 @@ dump.rdb
 
 # Qdrant
 qdrant_storage/
+
+# Local uploaded documents
+storage/

@@ -117,7 +117,7 @@ async def rag_chat_completion(
         search_results = vector_db.search(
             query_vector=query_embedding,
             top_k=request.top_k,
-            score_threshold=0.7,
+            score_threshold=request.score_threshold,
         )
 
         # Build context from search results

@@ -40,6 +40,7 @@ class RAGChatRequest(ChatRequest):
 
     use_rag: bool = True
     top_k: int = Field(5, ge=1, le=20)
+    score_threshold: float = Field(0.2, ge=0.0, le=1.0)
 
 
 class EmbeddingRequest(BaseModel):

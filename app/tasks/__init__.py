@@ -1,3 +1,1 @@
-from app.tasks import document_indexing
-
-from app.tasks import document_ingestion
+from app.tasks import document_indexing, document_ingestion
