@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.models.document import DocumentEmbeddingStatus
+
 
 class DocumentBase(BaseModel):
     """Base document schema."""
@@ -36,7 +38,7 @@ class DocumentInDB(DocumentBase):
     file_type: str | None
     user_id: UUID
     chunk_count: int
-    embedding_status: str
+    embedding_status: DocumentEmbeddingStatus
     created_at: datetime
     updated_at: datetime
 

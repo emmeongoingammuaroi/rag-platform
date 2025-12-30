@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.document import Document
+from app.models.document import Document, DocumentEmbeddingStatus
 from app.schemas.document import DocumentCreate, DocumentUpdate
 
 
@@ -57,7 +57,7 @@ class DocumentService:
             content=doc_in.content,
             user_id=user_id,
             chunk_count=0,
-            embedding_status="pending",
+            embedding_status=DocumentEmbeddingStatus.pending,
         )
         db.add(doc)
         await db.flush()
@@ -70,21 +70,21 @@ class DocumentService:
         for field, value in update_data.items():
             setattr(doc, field, value)
 
-        doc.embedding_status = "pending"
+        doc.embedding_status = DocumentEmbeddingStatus.pending
         await db.flush()
         await db.refresh(doc)
         return doc
 
     @staticmethod
     async def mark_indexing(db: AsyncSession, doc: Document) -> Document:
-        doc.embedding_status = "processing"
+        doc.embedding_status = DocumentEmbeddingStatus.processing
         await db.flush()
         await db.refresh(doc)
         return doc
 
     @staticmethod
     async def mark_indexed(db: AsyncSession, doc: Document, chunk_count: int) -> Document:
-        doc.embedding_status = "completed"
+        doc.embedding_status = DocumentEmbeddingStatus.completed
         doc.chunk_count = chunk_count
         await db.flush()
         await db.refresh(doc)
@@ -92,7 +92,7 @@ class DocumentService:
 
     @staticmethod
     async def mark_failed(db: AsyncSession, doc: Document) -> Document:
-        doc.embedding_status = "failed"
+        doc.embedding_status = DocumentEmbeddingStatus.failed
         await db.flush()
         await db.refresh(doc)
         return doc

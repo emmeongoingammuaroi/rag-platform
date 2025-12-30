@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.celery_app import celery_app
 from app.db.session import AsyncSessionLocal
-from app.models.document import Document
 from app.services.ai import ai_service
 from app.services.document import DocumentService
 from app.utils.vector_db import vector_db

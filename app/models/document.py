@@ -2,12 +2,21 @@
 Document model for storing uploaded documents and their metadata.
 """
 
+from enum import Enum
 from uuid import UUID
 
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import UUIDTimestampBase
+
+
+class DocumentEmbeddingStatus(str, Enum):
+    pending = "pending"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
 
 
 class Document(UUIDTimestampBase):
@@ -26,9 +35,11 @@ class Document(UUIDTimestampBase):
         index=True,
     )
     chunk_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    embedding_status: Mapped[str] = mapped_column(
-        String(50), default="pending", nullable=False
-    )  # pending, processing, completed, failed
+    embedding_status: Mapped[DocumentEmbeddingStatus] = mapped_column(
+        SAEnum(DocumentEmbeddingStatus, name="document_embedding_status"),
+        default=DocumentEmbeddingStatus.pending,
+        nullable=False,
+    )
 
     def __repr__(self) -> str:
         """String representation of Document."""
