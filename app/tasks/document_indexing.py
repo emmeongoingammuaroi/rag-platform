@@ -2,10 +2,10 @@ import asyncio
 import logging
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.celery_app import celery_app
-from app.db.session import AsyncSessionLocal
+from app.core.config import settings
 from app.services.ai import ai_service
 from app.services.document import DocumentService
 from app.utils.vector_db import vector_db
@@ -73,13 +73,31 @@ async def _index_document_async(db: AsyncSession, document_id: UUID) -> None:
 @celery_app.task(name="documents.index")
 def index_document(document_id: str) -> None:
     async def runner() -> None:
-        async with AsyncSessionLocal() as session:
-            try:
-                await _index_document_async(session, UUID(document_id))
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                raise
+        engine = create_async_engine(
+            settings.async_database_url,
+            echo=settings.DB_ECHO,
+            pool_pre_ping=True,
+            pool_size=10,
+            max_overflow=20,
+        )
+        sessionmaker = async_sessionmaker(
+            engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False,
+        )
+
+        try:
+            async with sessionmaker() as session:
+                try:
+                    await _index_document_async(session, UUID(document_id))
+                    await session.commit()
+                except Exception:
+                    await session.rollback()
+                    raise
+        finally:
+            await engine.dispose()
 
     asyncio.run(runner())
 

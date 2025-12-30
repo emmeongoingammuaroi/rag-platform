@@ -1,7 +1,6 @@
-"""
-Application configuration using Pydantic Settings v2.
-"""
+"""Application configuration using Pydantic Settings v2."""
 
+import json
 from typing import Any, List
 
 from pydantic import AnyHttpUrl, PostgresDsn, RedisDsn, field_validator
@@ -49,9 +48,15 @@ class Settings(BaseSettings):
     @classmethod
     def assemble_cors_origins(cls, v: str | List[str]) -> List[str] | str:
         """Parse CORS origins from string or list."""
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
+        if isinstance(v, str):
+            raw = v.strip()
+            if raw.startswith("["):
+                parsed = json.loads(raw)
+                if not isinstance(parsed, list):
+                    raise ValueError(v)
+                return parsed
+            return [i.strip() for i in raw.split(",") if i.strip()]
+        if isinstance(v, list):
             return v
         raise ValueError(v)
 
