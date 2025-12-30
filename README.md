@@ -28,7 +28,7 @@ app/
 ├── schemas/        # Pydantic schemas
 ├── api/            # API routes
 ├── services/       # Business logic
-├── workers/        # Background tasks
+├── tasks/          # Background tasks (Celery)
 └── utils/          # Utilities
 ```
 
@@ -72,7 +72,14 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-API will be available at: http://localhost:8000
+Or use Makefile shortcuts:
+
+```bash
+make run
+make celery-worker
+```
+
+API will be available at: http://localhost:8000 (default)
 
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
@@ -100,6 +107,12 @@ API will be available at: http://localhost:8000
 - `POST /api/v1/documents/upload` - Upload and process document
 - `GET /api/v1/documents` - List documents
 - `DELETE /api/v1/documents/{id}` - Delete document
+
+Document ingestion runs asynchronously via Celery:
+
+- `documents.ingest` - Extract text from uploaded file and trigger indexing
+- `documents.index` - Chunk, embed, and upsert to Qdrant
+- `documents.delete_vectors` - Delete vectors for a document
 
 ## Development
 
@@ -144,6 +157,7 @@ Key variables:
 - `SECRET_KEY` - JWT secret key
 - `OPENAI_API_KEY` - OpenAI API key
 - `QDRANT_URL` - Qdrant vector DB URL
+- `BACKEND_CORS_ORIGINS` - Comma-separated list or JSON array of allowed origins (e.g. `http://localhost:3000,http://127.0.0.1:3000`)
 
 ## Docker Deployment
 
