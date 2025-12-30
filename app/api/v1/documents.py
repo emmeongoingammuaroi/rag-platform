@@ -1,30 +1,59 @@
 """Document management endpoints."""
 
+import os
+from pathlib import Path
 from math import ceil
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User as UserModel
 from app.schemas.document import Document, DocumentCreate, DocumentList, DocumentUpdate
 from app.services.document import DocumentService
 from app.tasks.document_indexing import delete_document_vectors, index_document
+from app.tasks.document_ingestion import ingest_document
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
-@router.post("", response_model=Document, status_code=status.HTTP_201_CREATED)
-async def create_document(
-    doc_in: DocumentCreate,
+@router.post("/upload", response_model=Document, status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    file: UploadFile,
     current_user: Annotated[UserModel, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Document:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
+
+    ext = os.path.splitext(file.filename)[1].lower().lstrip(".")
+    if ext not in {"pdf", "docx", "txt", "md"}:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+    storage_dir = Path(settings.STORAGE_DIR) / "documents" / str(current_user.id)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+
+    file_id = uuid4().hex
+    stored_path = storage_dir / f"{file_id}.{ext}"
+
+    content = await file.read()
+    stored_path.write_bytes(content)
+
+    doc_in = DocumentCreate(
+        title=os.path.splitext(os.path.basename(file.filename))[0],
+        content="",
+    )
     doc = await DocumentService.create(db, user_id=current_user.id, doc_in=doc_in)
-    index_document.delay(str(doc.id))
+    doc.file_path = str(stored_path)
+    doc.file_type = ext
+    await db.flush()
+    await db.refresh(doc)
+
+    ingest_document.delay(str(doc.id))
     return doc
 
 

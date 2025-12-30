@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_NAME: str = "documents"
     VECTOR_DIMENSION: int = 1536
 
+    # Local storage
+    STORAGE_DIR: str = "storage"
+
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
 
