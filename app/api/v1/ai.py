@@ -3,6 +3,8 @@ AI endpoints for chat and embeddings.
 """
 
 import logging
+from datetime import datetime, timezone
+from math import ceil
 from typing import Annotated
 from uuid import UUID
 
@@ -23,7 +25,16 @@ from app.schemas.ai import (
     SemanticSearchRequest,
     SemanticSearchResponse,
 )
+from app.schemas.chat import (
+    Conversation,
+    ConversationCreate,
+    ConversationDetail,
+    ConversationList,
+    SendMessageRequest,
+    SendMessageResponse,
+)
 from app.services.ai import ai_service
+from app.services.chat import ChatService
 from app.utils.vector_db import vector_db
 
 logger = logging.getLogger(__name__)
@@ -80,6 +91,149 @@ async def chat_completion(
     except Exception as e:
         logger.error(f"Chat completion error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/conversations", response_model=Conversation)
+async def create_conversation(
+    conversation_in: ConversationCreate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Conversation:
+    conversation = await ChatService.create_conversation(
+        db,
+        user_id=current_user.id,
+        title=conversation_in.title,
+    )
+    return conversation
+
+
+@router.get("/conversations", response_model=ConversationList)
+async def list_conversations(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    page: int = 1,
+    page_size: int = 20,
+) -> ConversationList:
+    if page < 1:
+        raise HTTPException(status_code=400, detail="page must be >= 1")
+    if page_size < 1:
+        raise HTTPException(status_code=400, detail="page_size must be >= 1")
+
+    items, total = await ChatService.list_conversations_for_user(
+        db,
+        user_id=current_user.id,
+        page=page,
+        page_size=page_size,
+    )
+    pages = ceil(total / page_size) if page_size else 0
+    return ConversationList(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages,
+    )
+
+
+@router.get("/conversations/{conversation_id}", response_model=ConversationDetail)
+async def get_conversation(
+    conversation_id: UUID,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ConversationDetail:
+    conversation = await ChatService.get_conversation_for_user(
+        db,
+        conversation_id=conversation_id,
+        user_id=current_user.id,
+    )
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    messages = await ChatService.list_messages(db, conversation_id=conversation_id)
+    return ConversationDetail(
+        id=conversation.id,
+        title=conversation.title,
+        user_id=conversation.user_id,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+        messages=messages,
+    )
+
+
+@router.post(
+    "/conversations/{conversation_id}/messages",
+    response_model=SendMessageResponse,
+)
+async def send_message(
+    conversation_id: UUID,
+    request: SendMessageRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SendMessageResponse:
+    conversation = await ChatService.get_conversation_for_user(
+        db,
+        conversation_id=conversation_id,
+        user_id=current_user.id,
+    )
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    await ChatService.add_message(
+        db,
+        conversation_id=conversation_id,
+        role="user",
+        content=request.content,
+    )
+
+    history = await ChatService.list_messages(db, conversation_id=conversation_id)
+    messages = [{"role": m.role, "content": m.content} for m in history]
+
+    if request.use_rag:
+        query_embedding = await ai_service.create_single_embedding(request.content)
+        search_results = vector_db.search(
+            query_vector=query_embedding,
+            top_k=request.top_k,
+            score_threshold=request.score_threshold,
+        )
+
+        context_parts = []
+        for result in search_results:
+            payload = result.get("payload") or {}
+            context_parts.append(
+                f"[Document: {payload.get('title', 'Unknown')}]\n{payload.get('content', '')}"
+            )
+        context = "\n\n".join(context_parts)
+        if context:
+            messages.insert(
+                0,
+                {
+                    "role": "system",
+                    "content": f"Use the following context to answer the user's question:\n\n{context}",
+                },
+            )
+
+    response = await ai_service.chat_completion(
+        messages=messages,
+        temperature=request.temperature,
+        max_tokens=request.max_tokens,
+        model=request.model,
+    )
+
+    assistant_message = await ChatService.add_message(
+        db,
+        conversation_id=conversation_id,
+        role="assistant",
+        content=response["content"],
+        model=response.get("model"),
+    )
+
+    conversation.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    return SendMessageResponse(
+        conversation_id=conversation_id,
+        assistant_message=assistant_message,
+    )
 
 
 @router.post("/chat/rag", response_model=ChatResponse)
