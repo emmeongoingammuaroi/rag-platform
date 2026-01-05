@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
@@ -17,6 +17,12 @@ class ChatService:
         await db.flush()
         await db.refresh(conversation)
         return conversation
+
+    @staticmethod
+    async def delete_conversation(db: AsyncSession, *, conversation: Conversation) -> None:
+        await db.execute(delete(Message).where(Message.conversation_id == conversation.id))
+        await db.delete(conversation)
+        await db.flush()
 
     @staticmethod
     async def list_conversations_for_user(
@@ -54,6 +60,18 @@ class ChatService:
             )
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def update_conversation_title(
+        db: AsyncSession,
+        *,
+        conversation: Conversation,
+        title: str,
+    ) -> Conversation:
+        conversation.title = title
+        await db.flush()
+        await db.refresh(conversation)
+        return conversation
 
     @staticmethod
     async def list_messages(db: AsyncSession, *, conversation_id: UUID) -> list[Message]:

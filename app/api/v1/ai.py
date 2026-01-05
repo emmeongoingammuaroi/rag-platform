@@ -8,7 +8,7 @@ from math import ceil
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +30,7 @@ from app.schemas.chat import (
     ConversationCreate,
     ConversationDetail,
     ConversationList,
+    ConversationUpdate,
     SendMessageRequest,
     SendMessageResponse,
 )
@@ -160,6 +161,47 @@ async def get_conversation(
     )
 
 
+@router.patch("/conversations/{conversation_id}", response_model=Conversation)
+async def update_conversation(
+    conversation_id: UUID,
+    conversation_in: ConversationUpdate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Conversation:
+    conversation = await ChatService.get_conversation_for_user(
+        db,
+        conversation_id=conversation_id,
+        user_id=current_user.id,
+    )
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    updated = await ChatService.update_conversation_title(
+        db,
+        conversation=conversation,
+        title=conversation_in.title,
+    )
+    return updated
+
+
+@router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation(
+    conversation_id: UUID,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    conversation = await ChatService.get_conversation_for_user(
+        db,
+        conversation_id=conversation_id,
+        user_id=current_user.id,
+    )
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    await ChatService.delete_conversation(db, conversation=conversation)
+    return None
+
+
 @router.post(
     "/conversations/{conversation_id}/messages",
     response_model=SendMessageResponse,
@@ -177,6 +219,15 @@ async def send_message(
     )
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
+
+    if (conversation.title or "").strip().lower() == "new chat":
+        auto_title = request.content.strip().splitlines()[0][:60]
+        if auto_title:
+            await ChatService.update_conversation_title(
+                db,
+                conversation=conversation,
+                title=auto_title,
+            )
 
     await ChatService.add_message(
         db,

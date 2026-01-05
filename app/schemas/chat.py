@@ -8,6 +8,10 @@ class ConversationCreate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=255)
 
 
+class ConversationUpdate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+
+
 class ConversationInDB(BaseModel):
     id: UUID
     title: str
