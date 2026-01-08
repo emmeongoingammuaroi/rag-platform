@@ -167,6 +167,30 @@ Key variables:
 docker-compose up --build
 ```
 
+### CI/CD (GitHub Actions)
+
+This repository includes a sample GitHub Actions pipeline at `.github/workflows/ci-cd.yml`:
+
+- **CI**: runs `pytest` on pull requests.
+- **CD** (on push to `main`): builds and pushes a Docker image to **GHCR**, then deploys via SSH by running `docker compose pull`, `docker compose up -d`, and `alembic upgrade head`.
+
+#### Required GitHub Secrets
+
+- `SSH_HOST` - Server hostname/IP
+- `SSH_USER` - SSH username
+- `SSH_PRIVATE_KEY` - SSH private key
+- `SSH_PORT` - SSH port (e.g. `22`)
+- `APP_DIR` - Absolute path on the server containing `docker-compose.yml`
+
+#### Deployment image variables
+
+The `docker-compose.yml` supports pulling a registry image via environment variables:
+
+- `RAG_PLATFORM_IMAGE` (e.g. `ghcr.io/<owner>/rag-platform-api`)
+- `RAG_PLATFORM_TAG` (e.g. a git SHA)
+
+If not set, it falls back to a `latest` tag.
+
 ### Production Build
 
 ```bash
