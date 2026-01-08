@@ -47,6 +47,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: ${RAG_PLATFORM_IMAGE:-ghcr.io/your-org/rag-platform-api}:${RAG_PLATFORM_TAG:-latest}
     container_name: rag-platform-api
     ports:
       - "127.0.0.1:8010:8000"
@@ -73,6 +74,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: ${RAG_PLATFORM_IMAGE:-ghcr.io/your-org/rag-platform-api}:${RAG_PLATFORM_TAG:-latest}
     container_name: rag-platform-celery-worker
     command: ["celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=INFO"]
     healthcheck:
@@ -101,6 +103,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: ${RAG_PLATFORM_IMAGE:-ghcr.io/your-org/rag-platform-api}:${RAG_PLATFORM_TAG:-latest}
     container_name: rag-platform-celery-beat
     command: ["celery", "-A", "app.core.celery_app.celery_app", "beat", "--loglevel=INFO"]
     healthcheck:
