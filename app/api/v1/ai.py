@@ -150,7 +150,11 @@ async def get_conversation(
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    messages = await ChatService.list_messages(db, conversation_id=conversation_id)
+    messages = await ChatService.list_messages(
+        db,
+        conversation_id=conversation_id,
+        newest_first=True,
+    )
     return ConversationDetail(
         id=conversation.id,
         title=conversation.title,

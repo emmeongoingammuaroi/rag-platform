@@ -74,15 +74,6 @@ class ChatService:
         return conversation
 
     @staticmethod
-    async def list_messages(db: AsyncSession, *, conversation_id: UUID) -> list[Message]:
-        result = await db.execute(
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at.asc())
-        )
-        return list(result.scalars().all())
-
-    @staticmethod
     async def add_message(
         db: AsyncSession,
         *,
@@ -101,3 +92,13 @@ class ChatService:
         await db.flush()
         await db.refresh(msg)
         return msg
+
+    @staticmethod
+    async def list_messages(
+        db: AsyncSession, *, conversation_id: UUID, newest_first: bool = False
+    ) -> list[Message]:
+        order_by = Message.created_at.desc() if newest_first else Message.created_at.asc()
+        result = await db.execute(
+            select(Message).where(Message.conversation_id == conversation_id).order_by(order_by)
+        )
+        return list(result.scalars().all())
