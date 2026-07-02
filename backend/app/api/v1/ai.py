@@ -3,6 +3,7 @@ AI endpoints for chat and embeddings.
 """
 
 import logging
+from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 from math import ceil
 from typing import Annotated
@@ -68,7 +69,7 @@ async def chat_completion(
         # Handle streaming
         if request.stream:
 
-            async def generate():
+            async def generate() -> AsyncGenerator[str, None]:
                 async for chunk in ai_service.chat_completion_stream(
                     messages=messages,
                     temperature=request.temperature,
@@ -77,7 +78,7 @@ async def chat_completion(
                 ):
                     yield chunk
 
-            return StreamingResponse(generate(), media_type="text/event-stream")
+            return StreamingResponse(generate(), media_type="text/event-stream")  # type: ignore[return-value]
 
         # Non-streaming response
         response = await ai_service.chat_completion(

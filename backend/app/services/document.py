@@ -15,7 +15,8 @@ class DocumentService:
     @staticmethod
     async def get_by_id(db: AsyncSession, document_id: UUID) -> Document | None:
         result = await db.execute(select(Document).where(Document.id == document_id))
-        return result.scalar_one_or_none()
+        doc: Document | None = result.scalar_one_or_none()
+        return doc
 
     @staticmethod
     async def get_by_id_for_user(
@@ -24,7 +25,8 @@ class DocumentService:
         result = await db.execute(
             select(Document).where(Document.id == document_id, Document.user_id == user_id)
         )
-        return result.scalar_one_or_none()
+        doc: Document | None = result.scalar_one_or_none()
+        return doc
 
     @staticmethod
     async def list_for_user(

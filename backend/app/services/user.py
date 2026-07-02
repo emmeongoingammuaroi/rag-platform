@@ -19,19 +19,22 @@ class UserService:
     async def get_by_id(db: AsyncSession, user_id: UUID) -> User | None:
         """Get user by ID."""
         result = await db.execute(select(User).where(User.id == user_id))
-        return result.scalar_one_or_none()
+        user: User | None = result.scalar_one_or_none()
+        return user
 
     @staticmethod
     async def get_by_email(db: AsyncSession, email: str) -> User | None:
         """Get user by email."""
         result = await db.execute(select(User).where(User.email == email))
-        return result.scalar_one_or_none()
+        user: User | None = result.scalar_one_or_none()
+        return user
 
     @staticmethod
     async def get_by_username(db: AsyncSession, username: str) -> User | None:
         """Get user by username."""
         result = await db.execute(select(User).where(User.username == username))
-        return result.scalar_one_or_none()
+        user: User | None = result.scalar_one_or_none()
+        return user
 
     @staticmethod
     async def create(db: AsyncSession, user_in: UserCreate) -> User:
@@ -75,4 +78,5 @@ class UserService:
     @staticmethod
     async def is_active(user: User) -> bool:
         """Check if user is active."""
-        return user.is_active
+        active: bool = user.is_active
+        return active

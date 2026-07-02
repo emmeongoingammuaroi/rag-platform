@@ -38,7 +38,7 @@ app.add_middleware(
 
 # Exception handlers
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
+async def global_exception_handler(request: object, exc: Exception) -> JSONResponse:
     """Global exception handler."""
     logger.error(f"Global exception: {exc}", exc_info=True)
     return JSONResponse(
@@ -49,7 +49,7 @@ async def global_exception_handler(request, exc):
 
 # Health check endpoint
 @app.get("/health", tags=["Health"])
-async def health_check():
+async def health_check() -> dict[str, str]:
     """Health check endpoint."""
     return {
         "status": "healthy",
@@ -60,7 +60,7 @@ async def health_check():
 
 # Root endpoint
 @app.get("/", tags=["Root"])
-async def root():
+async def root() -> dict[str, str]:
     """Root endpoint."""
     return {
         "message": f"Welcome to {settings.PROJECT_NAME}",
@@ -78,7 +78,7 @@ app.include_router(documents.router, prefix=settings.API_V1_PREFIX)
 
 # Startup event
 @app.on_event("startup")
-async def startup_event():
+async def startup_event() -> None:
     """Application startup event."""
     logger.info(f"Starting {settings.PROJECT_NAME} v{settings.VERSION}")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
@@ -87,7 +87,7 @@ async def startup_event():
 
 # Shutdown event
 @app.on_event("shutdown")
-async def shutdown_event():
+async def shutdown_event() -> None:
     """Application shutdown event."""
     logger.info(f"Shutting down {settings.PROJECT_NAME}")
 

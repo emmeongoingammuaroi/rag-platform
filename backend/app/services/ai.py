@@ -152,7 +152,8 @@ class AIService:
             Embedding vector
         """
         embeddings = await self.create_embeddings([text], model)
-        return embeddings[0]
+        embedding: list[float] = embeddings[0]
+        return embedding
 
 
 # Global AI service instance

@@ -59,7 +59,8 @@ class ChatService:
                 Conversation.user_id == user_id,
             )
         )
-        return result.scalar_one_or_none()
+        conv: Conversation | None = result.scalar_one_or_none()
+        return conv
 
     @staticmethod
     async def update_conversation_title(
