@@ -1,7 +1,7 @@
 """Application configuration using Pydantic Settings v2."""
 
 import json
-from typing import Any, List
+from typing import List
 
 from pydantic import AnyHttpUrl, PostgresDsn, RedisDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict

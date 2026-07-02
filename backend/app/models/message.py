@@ -3,7 +3,6 @@ from uuid import UUID
 from sqlalchemy import ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models import conversation as _conversation
 from app.models.base import UUIDTimestampBase
 
 

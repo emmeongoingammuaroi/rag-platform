@@ -263,7 +263,9 @@ async def send_message(
                 0,
                 {
                     "role": "system",
-                    "content": f"Use the following context to answer the user's question:\n\n{context}",
+                    "content": (
+                        f"Use the following context to answer the user's question:\n\n{context}"
+                    ),
                 },
             )
 

@@ -10,7 +10,6 @@ from sqlalchemy import ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import UUIDTimestampBase
-from app.models import user as _user
 
 
 class DocumentEmbeddingStatus(str, Enum):
