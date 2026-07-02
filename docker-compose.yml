@@ -45,7 +45,7 @@ services:
   # FastAPI Application
   api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     image: ${RAG_PLATFORM_IMAGE:-ghcr.io/your-org/rag-platform-api}:${RAG_PLATFORM_TAG:-latest}
     container_name: rag-platform-api
@@ -63,16 +63,16 @@ services:
       - redis
       - qdrant
     volumes:
-      - ./app:/app/app
-      - ./alembic:/app/alembic
-      - ./storage:/app/storage
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/storage:/app/storage
     networks:
       - rag-platform-network
     restart: unless-stopped
 
   celery_worker:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     image: ${RAG_PLATFORM_IMAGE:-ghcr.io/your-org/rag-platform-api}:${RAG_PLATFORM_TAG:-latest}
     container_name: rag-platform-celery-worker
@@ -91,17 +91,16 @@ services:
       - redis
       - qdrant
     volumes:
-      - ./app:/app/app
-      - ./alembic:/app/alembic
-      - ./storage:/app/storage
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/storage:/app/storage
     networks:
       - rag-platform-network
     restart: unless-stopped
 
-  # Optional: scheduled tasks (only needed if you create periodic tasks)
   celery_beat:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     image: ${RAG_PLATFORM_IMAGE:-ghcr.io/your-org/rag-platform-api}:${RAG_PLATFORM_TAG:-latest}
     container_name: rag-platform-celery-beat
@@ -118,12 +117,33 @@ services:
     depends_on:
       - redis
     volumes:
-      - ./app:/app/app
-      - ./alembic:/app/alembic
-      - ./storage:/app/storage
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/storage:/app/storage
     networks:
       - rag-platform-network
     restart: unless-stopped
+
+  # Vite + React Frontend
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: dev
+    container_name: rag-platform-web
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8010
+    volumes:
+      - ./web/src:/app/src
+      - ./web/public:/app/public
+      - ./web/index.html:/app/index.html
+      - /app/node_modules
+    depends_on:
+      - api
+    networks:
+      - rag-platform-network
 
 volumes:
   postgres_data:

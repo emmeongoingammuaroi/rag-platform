@@ -69,4 +69,14 @@ dump.rdb
 qdrant_storage/
 
 # Local uploaded documents
-storage/
+backend/storage/
+
+# Frontend (web/)
+web/node_modules/
+web/dist/
+
+# Infrastructure
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/.terraform.lock.hcl
