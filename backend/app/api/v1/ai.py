@@ -48,7 +48,7 @@ router = APIRouter(prefix="/ai", tags=["AI"])
 async def chat_completion(
     request: ChatRequest,
     current_user: Annotated[User, Depends(get_current_active_user)],
-) -> ChatResponse:
+) -> ChatResponse | StreamingResponse:
     """
     Generate chat completion.
 
@@ -78,7 +78,7 @@ async def chat_completion(
                 ):
                     yield chunk
 
-            return StreamingResponse(generate(), media_type="text/event-stream")  # type: ignore[return-value]
+            return StreamingResponse(generate(), media_type="text/event-stream")
 
         # Non-streaming response
         response = await ai_service.chat_completion(
