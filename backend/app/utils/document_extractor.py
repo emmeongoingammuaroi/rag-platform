@@ -1,3 +1,5 @@
+"""Text extraction from uploaded files (PDF, DOCX, TXT, MD)."""
+
 import os
 from pathlib import Path
 

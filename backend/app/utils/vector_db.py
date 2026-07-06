@@ -1,6 +1,4 @@
-"""
-Vector database utilities using Qdrant.
-"""
+"""Qdrant vector database client with lazy initialization and user-scoped search."""
 
 import logging
 from typing import Any
@@ -23,26 +21,42 @@ logger = logging.getLogger(__name__)
 
 
 class VectorDB:
-    """Qdrant vector database client wrapper."""
+    """Qdrant client wrapper.
+
+    Connects lazily on first use to avoid import-time failures
+    when Qdrant is unreachable (e.g. in tests or CLI).
+    """
 
     def __init__(self) -> None:
-        """Initialize Qdrant client."""
-        self.client = QdrantClient(
-            url=settings.QDRANT_URL,
-            api_key=settings.QDRANT_API_KEY,
-        )
+        """Initialize without connecting — connection deferred to first access."""
+        self._client: QdrantClient | None = None
         self.collection_name = settings.QDRANT_COLLECTION_NAME
-        self._ensure_collection()
+
+    @property
+    def client(self) -> QdrantClient:
+        """Get or create the Qdrant client (lazy init).
+
+        Returns:
+            Connected QdrantClient instance.
+        """
+        if self._client is None:
+            self._client = QdrantClient(
+                url=settings.QDRANT_URL,
+                api_key=settings.QDRANT_API_KEY,
+            )
+            self._ensure_collection()
+        return self._client
 
     def _ensure_collection(self) -> None:
-        """Ensure collection exists, create if not."""
+        """Create the target collection if it doesn't exist."""
+        assert self._client is not None
         try:
-            collections = self.client.get_collections().collections
+            collections = self._client.get_collections().collections
             collection_names = [col.name for col in collections]
 
             if self.collection_name not in collection_names:
                 logger.info(f"Creating collection: {self.collection_name}")
-                self.client.create_collection(
+                self._client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=VectorParams(
                         size=settings.VECTOR_DIMENSION,
@@ -59,13 +73,12 @@ class VectorDB:
         payloads: list[dict[str, Any]],
         ids: list[str] | None = None,
     ) -> None:
-        """
-        Upsert vectors into collection.
+        """Upsert embedding vectors with associated metadata.
 
         Args:
-            vectors: List of embedding vectors
-            payloads: List of metadata payloads
-            ids: Optional list of IDs (auto-generated if not provided)
+            vectors: List of embedding vectors.
+            payloads: List of metadata dicts (must include user_id, document_id).
+            ids: Optional point IDs (auto-generated UUIDs if omitted).
         """
         if ids is None:
             ids = [str(uuid4()) for _ in vectors]
@@ -86,21 +99,34 @@ class VectorDB:
         query_vector: list[float],
         top_k: int = 5,
         score_threshold: float = 0.7,
+        user_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
-        """
-        Search for similar vectors.
+        """Semantic similarity search, scoped to a user's documents.
 
         Args:
-            query_vector: Query embedding vector
-            top_k: Number of results to return
-            score_threshold: Minimum similarity score
+            query_vector: The query embedding vector.
+            top_k: Maximum number of results to return.
+            score_threshold: Minimum cosine similarity score.
+            user_id: Filter results to this user's documents only.
 
         Returns:
-            List of search results with payloads and scores
+            List of dicts with keys: id, score, payload.
         """
+        query_filter = None
+        if user_id is not None:
+            query_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="user_id",
+                        match=MatchValue(value=str(user_id)),
+                    )
+                ]
+            )
+
         results = self.client.search(
             collection_name=self.collection_name,
             query_vector=query_vector,
+            query_filter=query_filter,
             limit=top_k,
             score_threshold=score_threshold,
         )
@@ -115,11 +141,10 @@ class VectorDB:
         ]
 
     def delete_by_document_id(self, document_id: UUID) -> None:
-        """
-        Delete all vectors for a document.
+        """Delete all vectors belonging to a specific document.
 
         Args:
-            document_id: Document ID to delete vectors for
+            document_id: The document whose vectors should be removed.
         """
         selector = FilterSelector(
             filter=Filter(
@@ -137,6 +162,11 @@ class VectorDB:
         )
         logger.info(f"Deleted vectors for document_id: {document_id}")
 
+    def close(self) -> None:
+        """Close the Qdrant client connection."""
+        if self._client is not None:
+            self._client.close()
+            self._client = None
 
-# Global vector DB instance
+
 vector_db = VectorDB()

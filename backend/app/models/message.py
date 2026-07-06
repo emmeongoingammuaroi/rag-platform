@@ -1,3 +1,5 @@
+"""Message model — individual messages within a conversation."""
+
 from uuid import UUID
 
 from sqlalchemy import ForeignKey, String, Text, Uuid

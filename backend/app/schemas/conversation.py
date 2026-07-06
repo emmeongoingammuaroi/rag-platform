@@ -1,3 +1,5 @@
+"""Pydantic schemas for conversation and message request/response models."""
+
 from datetime import datetime
 from uuid import UUID
 
@@ -56,12 +58,6 @@ class ConversationDetail(ConversationInDB):
 
 class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1)
-    temperature: float = Field(0.7, ge=0.0, le=2.0)
-    max_tokens: int | None = Field(None, gt=0, le=4000)
-    model: str | None = None
-    use_rag: bool = False
-    top_k: int = Field(5, ge=1, le=20)
-    score_threshold: float = Field(0.2, ge=0.0, le=1.0)
 
 
 class SendMessageResponse(BaseModel):

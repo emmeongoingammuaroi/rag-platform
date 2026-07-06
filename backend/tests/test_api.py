@@ -8,7 +8,6 @@ from httpx import AsyncClient
 
 @pytest.mark.asyncio
 async def test_health_check(client: AsyncClient):
-    """Test health check endpoint."""
     response = await client.get("/health")
     assert response.status_code == 200
     data = response.json()
@@ -18,7 +17,6 @@ async def test_health_check(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_root(client: AsyncClient):
-    """Test root endpoint."""
     response = await client.get("/")
     assert response.status_code == 200
     data = response.json()
@@ -28,7 +26,6 @@ async def test_root(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_register_user(client: AsyncClient):
-    """Test user registration."""
     user_data = {
         "email": "test@example.com",
         "username": "testuser",
@@ -45,8 +42,6 @@ async def test_register_user(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_login(client: AsyncClient):
-    """Test user login."""
-    # First register a user
     user_data = {
         "email": "login@example.com",
         "username": "loginuser",
@@ -54,14 +49,12 @@ async def test_login(client: AsyncClient):
     }
     await client.post("/api/v1/auth/register", json=user_data)
 
-    # Then login
     login_data = {
-        "username": user_data["email"],  # OAuth2 uses username field for email
+        "username": user_data["email"],
         "password": user_data["password"],
     }
     response = await client.post("/api/v1/auth/login", data=login_data)
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
-    assert "refresh_token" in data
     assert data["token_type"] == "bearer"

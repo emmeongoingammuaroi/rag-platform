@@ -31,23 +31,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency for getting async database sessions.
 
-    Yields:
-        AsyncSession: Database session
-
-    Example:
-        ```python
-        @app.get("/users")
-        async def get_users(db: AsyncSession = Depends(get_db)):
-            result = await db.execute(select(User))
-            return result.scalars().all()
-        ```
+    Callers must explicitly commit when mutations succeed.
+    Rolls back automatically on unhandled exceptions.
     """
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()

@@ -1,6 +1,4 @@
-"""
-AI service for LLM and embedding operations.
-"""
+"""OpenAI LLM service — chat completions, streaming, and embeddings."""
 
 import logging
 from typing import Any, AsyncGenerator
@@ -14,10 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 class AIService:
-    """AI service for OpenAI integration."""
+    """Async wrapper around OpenAI's chat and embedding APIs with retry logic."""
 
     def __init__(self) -> None:
-        """Initialize OpenAI client."""
+        """Initialize the OpenAI async client with settings from config."""
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = settings.OPENAI_MODEL
         self.embedding_model = settings.OPENAI_EMBEDDING_MODEL
@@ -156,5 +154,4 @@ class AIService:
         return embedding
 
 
-# Global AI service instance
-ai_service = AIService()
+llm_service = AIService()

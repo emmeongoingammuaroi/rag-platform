@@ -1,3 +1,5 @@
+"""Conversation model — groups messages into a chat thread per user."""
+
 from uuid import UUID
 
 from sqlalchemy import ForeignKey, String, Uuid

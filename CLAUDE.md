@@ -6,7 +6,7 @@ Production-ready RAG (Retrieval-Augmented Generation) platform. Users upload doc
 
 **Stack:** Python 3.12 + FastAPI | PostgreSQL + SQLAlchemy 2.0 | Redis + Celery | Qdrant | OpenAI API
 
-**Run:** `make up` (or `docker compose up`) → 7 services (postgres, redis, qdrant, api, celery_worker, celery_beat, web)
+**Run:** `make up` (or `docker compose up`) → 6 services (postgres, redis, qdrant, api, celery_worker, web)
 
 **Monorepo:** `backend/` (Python/FastAPI) | `web/` (Vite + React SPA) | `infra/` (Terraform placeholder)
 
@@ -40,15 +40,16 @@ app/
 
 ### What Goes Where
 
-- **User auth, registration, password reset** → `app/core/users.py` (FastAPI-Users config)
+- **User auth, registration, password reset** → `app/core/auth.py` (FastAPI-Users config)
 - **Document CRUD** → `app/services/document.py` (service) + `app/api/v1/documents.py` (router)
-- **Document processing** → `app/tasks/` (Celery) calling `app/rag/ingest.py`
+- **Document processing** → `app/tasks/ingestion.py` (Celery tasks: extract → chunk → embed → index)
 - **Text extraction (PDF/DOCX/TXT)** → `app/utils/document_extractor.py`
-- **RAG retrieval pipeline** → `app/rag/retriever.py` (orchestrate: hyde → embed → search → rerank)
-- **LLM chat calls** → `app/services/ai.py`
+- **LLM chat + embeddings** → `app/services/llm.py`
 - **Vector DB operations** → `app/utils/vector_db.py`
-- **Conversation/message CRUD** → `app/services/chat.py`
+- **Conversation/message CRUD** → `app/services/conversation.py`
 - **Config/env vars** → `app/core/config.py` (single Pydantic Settings class)
+- **Rate limiting** → `app/core/rate_limit.py` (slowapi + Redis)
+- **Request correlation** → `app/core/middleware.py` (X-Request-ID)
 
 ### Do NOT
 
@@ -99,17 +100,16 @@ app/
 upload → extract text (PDF/DOCX/TXT/MD) → chunk → embed → upsert to Qdrant
 ```
 
-### Retrieval
+### Retrieval (current)
 ```
-query → [HyDE expand] → embed → Qdrant search (filtered by user_id)
-  → top-20 → [rerank] → top-5 → inject as context → LLM generate
+query → embed → Qdrant search (filtered by user_id) → top-5 → inject as context → LLM generate
 ```
 
-- **Chunker:** Recursive text splitter, chunk_size=512, overlap=50. Sentence-aware.
-- **Embedder:** OpenAI text-embedding-3-small (1536d), batch up to 20.
-- **Reranker:** cross-encoder/ms-marco-MiniLM-L-6-v2, lazy-loaded. Toggle: `RERANKER_ENABLED`
-- **HyDE:** LLM generates hypothetical answer, embed that instead of raw query. Toggle: `HYDE_ENABLED`
-- **Hybrid search:** Dense + sparse (BM25) via Qdrant. Toggle: `HYBRID_SEARCH_ENABLED`
+- **Chunker:** Sliding window, chunk_size=800, overlap=120. (Phase 3: upgrade to recursive sentence-aware)
+- **Embedder:** OpenAI text-embedding-3-small (1536d).
+- **Reranker:** Not yet implemented (Phase 3.2)
+- **HyDE:** Not yet implemented (Phase 3.3)
+- **Hybrid search:** Not yet implemented (Phase 3.4)
 
 ---
 
@@ -125,6 +125,7 @@ REDIS_URL=redis://redis:6379/0
 
 # Security
 SECRET_KEY=<random-string>
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 # OpenAI
 OPENAI_API_KEY=
@@ -137,22 +138,12 @@ QDRANT_URL=http://qdrant:6333
 QDRANT_COLLECTION_NAME=documents
 VECTOR_DIMENSION=1536
 
-# RAG Toggles
-RERANKER_ENABLED=true
-HYDE_ENABLED=true
-HYBRID_SEARCH_ENABLED=false
-
 # Rate Limiting
 RATE_LIMIT_PER_MINUTE=60
 
 # Storage
 STORAGE_DIR=storage
-STORAGE_BACKEND=local
-
-# Observability
-OBSERVABILITY_PROVIDER=none
-LANGFUSE_PUBLIC_KEY=
-LANGFUSE_SECRET_KEY=
+MAX_UPLOAD_SIZE_MB=20
 
 # App
 ENVIRONMENT=development
@@ -168,16 +159,14 @@ LOG_FORMAT=json
 ```
 backend/                — Python/FastAPI backend
   app/
-    core/              — config, auth, logging, celery
+    core/              — config, auth (FastAPI-Users), logging, celery, middleware, rate_limit
     db/                — SQLAlchemy engine, session, base model
     models/            — ORM models (user, document, conversation, message)
-    schemas/           — Pydantic request/response models
-    api/v1/            — FastAPI routers (auth, users, documents, ai)
-    services/          — business logic (document, ai, chat)
-    tasks/             — Celery tasks (document ingestion, indexing)
-    rag/               — RAG pipeline (chunker, embedder, reranker, hyde, retriever, ingest)
+    schemas/           — Pydantic request/response models (user, document, conversation)
+    api/v1/            — FastAPI routers (auth, users, documents, conversations)
+    services/          — business logic (llm, document, conversation)
+    tasks/             — Celery tasks (ingestion: extract → chunk → embed → index)
     utils/             — vector_db client, document_extractor
-    eval/              — evaluation pipeline (metrics, dataset, runner)
   alembic/             — DB migrations
   tests/               — pytest
   Dockerfile
@@ -203,13 +192,13 @@ Makefile               — root shortcuts (make up/down/build/migrate)
 # Auth (FastAPI-Users)
 POST   /api/v1/auth/register
 POST   /api/v1/auth/login
-POST   /api/v1/auth/refresh
 POST   /api/v1/auth/forgot-password
 POST   /api/v1/auth/reset-password
+POST   /api/v1/auth/verify
 
-# Users
+# Users (FastAPI-Users)
 GET    /api/v1/users/me
-PUT    /api/v1/users/me
+PATCH  /api/v1/users/me
 
 # Documents
 POST   /api/v1/documents/upload      — upload + async ingest
@@ -218,19 +207,13 @@ GET    /api/v1/documents/{id}         — get single
 PUT    /api/v1/documents/{id}         — update + re-index
 DELETE /api/v1/documents/{id}         — delete + remove vectors
 
-# AI / Chat
-POST   /api/v1/ai/chat               — direct LLM chat (streaming optional)
-POST   /api/v1/ai/chat/rag           — RAG-enhanced chat
-POST   /api/v1/ai/embeddings         — generate embeddings
-POST   /api/v1/ai/embeddings/search  — semantic search
-
-# Conversations
-POST   /api/v1/ai/conversations                        — create
-GET    /api/v1/ai/conversations                        — list
-GET    /api/v1/ai/conversations/{id}                   — get with messages
-PATCH  /api/v1/ai/conversations/{id}                   — update title
-DELETE /api/v1/ai/conversations/{id}                   — delete
-POST   /api/v1/ai/conversations/{id}/messages          — send message (RAG optional)
+# Conversations (RAG always enabled)
+POST   /api/v1/conversations                        — create
+GET    /api/v1/conversations                        — list
+GET    /api/v1/conversations/{id}                   — get with messages
+PATCH  /api/v1/conversations/{id}                   — update title
+DELETE /api/v1/conversations/{id}                   — delete
+POST   /api/v1/conversations/{id}/messages          — send message + RAG retrieval
 
 # System
 GET    /health                        — liveness check
