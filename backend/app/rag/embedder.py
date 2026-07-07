@@ -50,5 +50,5 @@ async def embed_query(text: str, model: str | None = None) -> list[float]:
     Returns:
         Embedding vector.
     """
-    embeddings = await embed_texts([text], model)
+    embeddings: list[list[float]] = await embed_texts([text], model)
     return embeddings[0]

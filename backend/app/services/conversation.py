@@ -100,7 +100,8 @@ class ConversationService:
                 Conversation.user_id == user_id,
             )
         )
-        return result.scalar_one_or_none()
+        row: Conversation | None = result.scalar_one_or_none()
+        return row
 
     @staticmethod
     async def update_conversation_title(

@@ -1,6 +1,7 @@
 """FastAPI-Users configuration — JWT auth backend, UserManager, and dependencies."""
 
 import uuid
+from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from fastapi import Depends
@@ -20,7 +21,7 @@ from app.models.user import User
 
 async def get_user_db(
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> SQLAlchemyUserDatabase:  # type: ignore[type-arg]
+) -> AsyncGenerator[SQLAlchemyUserDatabase, None]:  # type: ignore[type-arg]
     """Provide SQLAlchemy user database adapter for FastAPI-Users."""
     yield SQLAlchemyUserDatabase(session, User)
 
@@ -34,7 +35,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
 
 async def get_user_manager(
     user_db: Annotated[SQLAlchemyUserDatabase, Depends(get_user_db)],  # type: ignore[type-arg]
-) -> UserManager:  # type: ignore[misc]
+) -> AsyncGenerator[UserManager, None]:
     """FastAPI dependency that yields a UserManager instance."""
     yield UserManager(user_db)
 
