@@ -12,11 +12,11 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.api.v1 import auth, conversations, documents, users
+from app.api.v1 import auth, conversations, documents, metrics, users
 from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.logging import setup_logging
-from app.core.middleware import RequestIDMiddleware
+from app.core.middleware import MetricsMiddleware, RequestIDMiddleware
 from app.core.rate_limit import limiter
 from app.db.session import AsyncSessionLocal
 from app.utils.vector_db import vector_db
@@ -47,6 +47,7 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+app.add_middleware(MetricsMiddleware)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -157,6 +158,7 @@ app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(users.router, prefix=settings.API_V1_PREFIX)
 app.include_router(conversations.router, prefix=settings.API_V1_PREFIX)
 app.include_router(documents.router, prefix=settings.API_V1_PREFIX)
+app.include_router(metrics.router, prefix=settings.API_V1_PREFIX)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import settings
+from app.utils.tracing import get_current_trace, trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,28 @@ class LLMService:
         Returns:
             Dict with id, model, content, role, finish_reason, usage.
         """
-        response = await self.client.chat.completions.create(
-            model=model or settings.OPENAI_MODEL,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens or settings.OPENAI_MAX_TOKENS,
-        )
+        trace = get_current_trace()
+        use_span = trace is not None
+
+        if use_span:
+            with trace_span("llm_generate") as span:
+                response = await self.client.chat.completions.create(
+                    model=model or settings.OPENAI_MODEL,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens or settings.OPENAI_MAX_TOKENS,
+                )
+                span.set_attribute("model", response.model)
+                span.set_attribute("prompt_tokens", response.usage.prompt_tokens)
+                span.set_attribute("completion_tokens", response.usage.completion_tokens)
+                span.set_attribute("total_tokens", response.usage.total_tokens)
+        else:
+            response = await self.client.chat.completions.create(
+                model=model or settings.OPENAI_MODEL,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens or settings.OPENAI_MAX_TOKENS,
+            )
 
         return {
             "id": response.id,

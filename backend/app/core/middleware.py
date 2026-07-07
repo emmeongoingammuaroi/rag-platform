@@ -1,10 +1,13 @@
-"""Custom middleware — request correlation ID for tracing."""
+"""Custom middleware — request correlation ID and metrics tracking."""
 
+import time
 from uuid import uuid4
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+
+from app.utils.metrics import metrics
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -22,4 +25,15 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
+        return response
+
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Records per-request latency and status code for the metrics summary."""
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        start = time.perf_counter()
+        response = await call_next(request)
+        latency_ms = (time.perf_counter() - start) * 1000
+        metrics.record_request(response.status_code, latency_ms)
         return response
