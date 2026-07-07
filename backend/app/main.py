@@ -14,6 +14,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.v1 import auth, conversations, documents, users
 from app.core.config import settings
+from app.core.exceptions import AppError
 from app.core.logging import setup_logging
 from app.core.middleware import RequestIDMiddleware
 from app.core.rate_limit import limiter
@@ -57,13 +58,37 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    body: dict[str, object] = {
+        "error": {
+            "code": exc.code,
+            "message": exc.message,
+        }
+    }
+    if request_id:
+        body["error"]["request_id"] = request_id  # type: ignore[index]
+    if settings.DEBUG and exc.detail:
+        body["error"]["detail"] = exc.detail  # type: ignore[index]
+    return JSONResponse(status_code=exc.status_code, content=body)
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error(f"Global exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"},
-    )
+    request_id = getattr(request.state, "request_id", None)
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    body: dict[str, object] = {
+        "error": {
+            "code": "internal_error",
+            "message": "Internal server error",
+        }
+    }
+    if request_id:
+        body["error"]["request_id"] = request_id  # type: ignore[index]
+    if settings.DEBUG:
+        body["error"]["detail"] = str(exc)  # type: ignore[index]
+    return JSONResponse(status_code=500, content=body)
 
 
 @app.get("/health", tags=["Health"])

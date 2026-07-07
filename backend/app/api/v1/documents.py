@@ -15,7 +15,7 @@ from app.db.session import get_db
 from app.models.user import User as UserModel
 from app.schemas.document import Document, DocumentCreate, DocumentList, DocumentUpdate
 from app.services.document import DocumentService
-from app.tasks.ingestion import delete_document_vectors, index_document, ingest_document
+from app.tasks.ingestion import delete_document_vectors, task_index_document, task_ingest_document
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -76,7 +76,7 @@ async def upload_document(
     await db.refresh(doc)
 
     await db.commit()
-    ingest_document.delay(str(doc.id))
+    task_ingest_document.delay(str(doc.id))
     return doc
 
 
@@ -138,7 +138,7 @@ async def update_document(
 
     updated = await DocumentService.update(db, doc=doc, doc_in=doc_in)
     await db.commit()
-    index_document.delay(str(updated.id))
+    task_index_document.delay(str(updated.id))
     return updated
 
 

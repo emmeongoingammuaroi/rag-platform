@@ -42,12 +42,16 @@ app/
 
 - **User auth, registration, password reset** → `app/core/auth.py` (FastAPI-Users config)
 - **Document CRUD** → `app/services/document.py` (service) + `app/api/v1/documents.py` (router)
-- **Document processing** → `app/tasks/ingestion.py` (Celery tasks: extract → chunk → embed → index)
+- **Document processing** → `app/tasks/ingestion.py` (Celery tasks) calling `app/rag/ingest.py` (orchestrator)
+- **Text chunking** → `app/rag/chunker.py`
+- **Embeddings** → `app/rag/embedder.py` (OpenAI embedding wrapper)
+- **RAG retrieval** → `app/rag/retriever.py` (embed query → vector search → format context)
 - **Text extraction (PDF/DOCX/TXT)** → `app/utils/document_extractor.py`
-- **LLM chat + embeddings** → `app/services/llm.py`
+- **LLM chat** → `app/services/llm.py` (chat completions + streaming only)
 - **Vector DB operations** → `app/utils/vector_db.py`
 - **Conversation/message CRUD** → `app/services/conversation.py`
 - **Config/env vars** → `app/core/config.py` (single Pydantic Settings class)
+- **Domain exceptions** → `app/core/exceptions.py` (AppError hierarchy)
 - **Rate limiting** → `app/core/rate_limit.py` (slowapi + Redis)
 - **Request correlation** → `app/core/middleware.py` (X-Request-ID)
 
@@ -73,7 +77,7 @@ app/
 - **SQLAlchemy 2.0** mapped_column style (not legacy Column)
 - **No classes for simple services** — use static methods or plain functions
 - **Imports:** absolute from project root (`from app.services.document import DocumentService`)
-- **Error handling:** HTTPException in routers, raise/return in services
+- **Error handling:** `AppError` subclasses for domain errors, `HTTPException` for simple HTTP errors in routers. Structured response: `{"error": {"code", "message", "request_id"}}`. Debug-only detail in dev.
 - **Tests:** pytest + pytest-asyncio, files in `tests/`
 - **Formatting:** ruff (line-length=100, replaces black+isort+flake8), mypy for type checking
 
@@ -159,19 +163,20 @@ LOG_FORMAT=json
 ```
 backend/                — Python/FastAPI backend
   app/
-    core/              — config, auth (FastAPI-Users), logging, celery, middleware, rate_limit
+    core/              — config, auth (FastAPI-Users), logging, celery, middleware, rate_limit, exceptions
     db/                — SQLAlchemy engine, session, base model
     models/            — ORM models (user, document, conversation, message)
     schemas/           — Pydantic request/response models (user, document, conversation)
     api/v1/            — FastAPI routers (auth, users, documents, conversations)
-    services/          — business logic (llm, document, conversation)
-    tasks/             — Celery tasks (ingestion: extract → chunk → embed → index)
+    services/          — business logic (llm chat, document, conversation)
+    rag/               — RAG pipeline (chunker, embedder, retriever, ingest, reranker, hyde)
+    tasks/             — Celery tasks (thin wrappers calling app.rag.ingest)
     utils/             — vector_db client, document_extractor
   alembic/             — DB migrations
   tests/               — pytest
   Dockerfile
-  requirements.txt
-  pyproject.toml       — ruff, mypy, pytest config
+  requirements.txt     — kept for Docker pip install (mirrors pyproject.toml)
+  pyproject.toml       — PEP 621 deps, ruff, mypy, pytest config
   Makefile             — backend-specific commands (lint, test, run)
 
 web/                   — Vite + React SPA (TypeScript, Tailwind)
@@ -219,3 +224,16 @@ POST   /api/v1/conversations/{id}/messages          — send message + RAG retri
 GET    /health                        — liveness check
 GET    /ready                         — readiness check (verify DB, Redis, Qdrant)
 ```
+
+---
+
+## Key Decisions
+
+- FastAPI-Users for auth — no custom JWT logic
+- RAG always enabled — every message triggers retrieval, no toggle
+- Hyperparameters (temperature, top_k, model) are server-side config, not in request payload
+- Vector search always filtered by user_id — mandatory data isolation
+- Lazy-init for external services (Qdrant) — no connection on import
+- Explicit commit in routers — `get_db()` never auto-commits
+- RAG logic in `app/rag/` — tasks are thin Celery wrappers, pipeline logic is testable without Celery
+- Structured errors via `AppError` — consistent JSON format, no exception leaking in production

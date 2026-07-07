@@ -33,9 +33,10 @@ Requires Docker and a `.env` file (copy from `.env.example`).
 backend/
   app/
     api/v1/          — Routers (auth, users, conversations, documents)
-    core/            — Config, auth (FastAPI-Users), rate limiting, middleware
-    services/        — Business logic (llm, conversation, document)
-    tasks/           — Celery tasks (document ingestion pipeline)
+    core/            — Config, auth (FastAPI-Users), rate limiting, middleware, exceptions
+    services/        — Business logic (llm chat, conversation, document)
+    rag/             — RAG pipeline (chunker, embedder, retriever, ingest)
+    tasks/           — Celery tasks (thin wrappers around rag.ingest)
     models/          — SQLAlchemy ORM models
     schemas/         — Pydantic request/response schemas
     utils/           — Vector DB client, document extractor

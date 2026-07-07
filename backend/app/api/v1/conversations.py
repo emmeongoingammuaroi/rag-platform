@@ -13,6 +13,7 @@ from app.api.deps import get_current_active_user
 from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.models.user import User
+from app.rag.retriever import format_context, retrieve
 from app.schemas.conversation import (
     Conversation,
     ConversationCreate,
@@ -24,7 +25,6 @@ from app.schemas.conversation import (
 )
 from app.services.conversation import ConversationService
 from app.services.llm import llm_service
-from app.utils.vector_db import vector_db
 
 logger = logging.getLogger(__name__)
 
@@ -185,19 +185,8 @@ async def send_message(
     history = await ConversationService.list_messages(db, conversation_id=conversation_id)
     messages = [{"role": m.role, "content": m.content} for m in history]
 
-    query_embedding = await llm_service.create_single_embedding(msg_in.content)
-    search_results = vector_db.search(
-        query_vector=query_embedding,
-        user_id=current_user.id,
-    )
-
-    context_parts = []
-    for result in search_results:
-        payload = result.get("payload") or {}
-        context_parts.append(
-            f"[Document: {payload.get('title', 'Unknown')}]\n{payload.get('content', '')}"
-        )
-    context = "\n\n".join(context_parts)
+    search_results = await retrieve(query=msg_in.content, user_id=current_user.id)
+    context = format_context(search_results)
     if context:
         messages.insert(
             0,
