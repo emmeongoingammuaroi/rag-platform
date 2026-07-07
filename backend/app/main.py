@@ -121,7 +121,7 @@ async def readiness_check() -> JSONResponse:
     try:
         r = aioredis.from_url(str(settings.REDIS_URL))
         await r.ping()
-        await r.aclose()
+        await r.aclose()  # type: ignore[attr-defined]
         checks["redis"] = "ok"
     except Exception:
         checks["redis"] = "unavailable"

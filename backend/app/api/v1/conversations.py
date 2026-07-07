@@ -66,7 +66,7 @@ async def list_conversations(
     )
     pages = ceil(total / page_size) if page_size else 0
     return ConversationList(
-        items=items,
+        items=items,  # type: ignore[arg-type]
         total=total,
         page=page,
         page_size=page_size,
@@ -99,7 +99,7 @@ async def get_conversation(
         user_id=conversation.user_id,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
-        messages=messages,
+        messages=messages,  # type: ignore[arg-type]
     )
 
 

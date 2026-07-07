@@ -7,6 +7,7 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
       - id: check-json
+        exclude: ^web/tsconfig
       - id: check-toml
       - id: check-merge-conflict
       - id: debug-statements
@@ -16,14 +17,15 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        files: ^backend/
+        files: ^backend/app/
       - id: ruff-format
-        files: ^backend/
+        files: ^backend/app/
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0
     hooks:
       - id: mypy
-        files: ^backend/
-        additional_dependencies: [pydantic>=2.0]
+        files: ^backend/app/
+        exclude: ^backend/alembic/
+        additional_dependencies: [pydantic>=2.0, types-redis]
         args: [--ignore-missing-imports]

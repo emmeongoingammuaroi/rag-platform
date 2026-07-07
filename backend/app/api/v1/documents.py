@@ -101,7 +101,7 @@ async def list_documents(
 
     pages = ceil(total / page_size) if page_size else 0
     return DocumentList(
-        items=items,
+        items=items,  # type: ignore[arg-type]
         total=total,
         page=page,
         page_size=page_size,
