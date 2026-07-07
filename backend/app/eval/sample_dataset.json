@@ -1,0 +1,66 @@
+{
+  "name": "rag-platform-sample",
+  "description": "Sample evaluation dataset for RAG platform testing. Replace with real data for production evaluation.",
+  "samples": [
+    {
+      "query": "What is the maximum file upload size?",
+      "expected_answer": "The maximum file upload size is 20MB, which is configurable via the MAX_UPLOAD_SIZE_MB environment variable.",
+      "relevant_chunk_ids": [],
+      "metadata": {"category": "configuration"}
+    },
+    {
+      "query": "How does the document deduplication work?",
+      "expected_answer": "Document deduplication uses SHA-256 hash of the file content. If the same file is uploaded again, it returns a 409 Conflict. For incremental re-indexing, chunk-level hash comparison avoids re-embedding unchanged content.",
+      "relevant_chunk_ids": [],
+      "metadata": {"category": "architecture"}
+    },
+    {
+      "query": "What embedding model is used?",
+      "expected_answer": "The platform uses OpenAI text-embedding-3-small model which produces 1536-dimensional vectors.",
+      "relevant_chunk_ids": [],
+      "metadata": {"category": "ml"}
+    },
+    {
+      "query": "How is user data isolation enforced in vector search?",
+      "expected_answer": "Vector search always includes a user_id filter. When indexing, user_id is stored in the Qdrant payload. When searching, a Qdrant Filter with FieldCondition on user_id ensures users only see their own documents.",
+      "relevant_chunk_ids": [],
+      "metadata": {"category": "security"}
+    },
+    {
+      "query": "What is HyDE and how does it improve retrieval?",
+      "expected_answer": "HyDE (Hypothetical Document Embedding) generates a hypothetical answer to the query using an LLM, then embeds that hypothetical answer instead of the raw query. This bridges the semantic gap between short queries and long document passages.",
+      "relevant_chunk_ids": [],
+      "metadata": {"category": "rag"}
+    },
+    {
+      "query": "How does the reranker work?",
+      "expected_answer": "The reranker uses a cross-encoder model (ms-marco-MiniLM-L-6-v2) for two-stage retrieval. First, Qdrant returns top-20 results using fast bi-encoder similarity. Then the cross-encoder reranks these by scoring query-document pairs directly, returning the top-5 most precise results.",
+      "relevant_chunk_ids": [],
+      "metadata": {"category": "rag"}
+    },
+    {
+      "query": "What document formats are supported?",
+      "expected_answer": "The platform supports PDF, DOCX, TXT, and Markdown files. PDF extraction uses PyMuPDF for text and pdfplumber for tables. Scanned PDFs can be processed with OCR (pytesseract) when OCR_ENABLED is set to true.",
+      "relevant_chunk_ids": [],
+      "metadata": {"category": "features"}
+    },
+    {
+      "query": "How are documents chunked for indexing?",
+      "expected_answer": "Documents use a recursive sentence-aware splitter with chunk_size=512 and overlap=50. It splits by separators in order: double newline, single newline, period+space, word boundary, then character boundary. This respects sentence boundaries.",
+      "relevant_chunk_ids": [],
+      "metadata": {"category": "rag"}
+    },
+    {
+      "query": "What rate limiting is in place?",
+      "expected_answer": "Rate limiting is implemented using slowapi with Redis as the backend. The default limit is 60 requests per minute per user, configurable via RATE_LIMIT_PER_MINUTE.",
+      "relevant_chunk_ids": [],
+      "metadata": {"category": "security"}
+    },
+    {
+      "query": "How does the streaming chat response work?",
+      "expected_answer": "Streaming uses Server-Sent Events (SSE). The LLM service calls OpenAI with stream=True and yields content chunks as they arrive. The conversation endpoint streams tokens in real-time to the client.",
+      "relevant_chunk_ids": [],
+      "metadata": {"category": "features"}
+    }
+  ]
+}

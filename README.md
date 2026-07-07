@@ -39,6 +39,7 @@ backend/
     core/            — Config, auth (FastAPI-Users), rate limiting, middleware, exceptions
     services/        — Business logic (llm chat, conversation, document)
     rag/             — RAG pipeline (chunker, embedder, retriever, ingest)
+    eval/            — Evaluation pipeline (metrics, A/B runner, CLI)
     tasks/           — Celery tasks (thin wrappers around rag.ingest)
     models/          — SQLAlchemy ORM models
     schemas/         — Pydantic request/response schemas
@@ -113,6 +114,32 @@ Chat:    query → [HyDE] → embed → vector search (user-scoped, top-20) → 
 | Embedding | OpenAI text-embedding-3-small (1536d) | Always on |
 | HyDE | LLM generates hypothetical answer → embed that | `HYDE_ENABLED` |
 | Reranker | Cross-encoder ms-marco-MiniLM-L-6-v2 (top-20 → top-5) | `RERANKER_ENABLED` |
+
+## Evaluation
+
+Compare RAG pipeline variants (baseline vs +reranker vs +hyde vs all) with retrieval and generation metrics.
+
+```bash
+# Run inside backend container (requires services running)
+docker compose exec api python -m app.eval \
+  --dataset app/eval/sample_dataset.json \
+  --user-id <uuid>
+
+# Skip LLM-as-judge (faster, retrieval metrics only)
+docker compose exec api python -m app.eval \
+  --dataset app/eval/sample_dataset.json \
+  --user-id <uuid> \
+  --skip-generation
+
+# Select specific configs + output to file
+docker compose exec api python -m app.eval \
+  --dataset app/eval/sample_dataset.json \
+  --user-id <uuid> \
+  --configs baseline +reranker +hyde +all \
+  --output results.md
+```
+
+Metrics: Precision@k, Recall@k, MRR, Hit Rate, Faithfulness (LLM-as-judge), Answer Relevance, Latency p50/p95/p99.
 
 ## Development
 

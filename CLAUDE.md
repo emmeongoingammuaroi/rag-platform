@@ -55,6 +55,7 @@ app/
 - **Domain exceptions** → `app/core/exceptions.py` (AppError hierarchy)
 - **Rate limiting** → `app/core/rate_limit.py` (slowapi + Redis)
 - **Request correlation** → `app/core/middleware.py` (X-Request-ID)
+- **RAG evaluation** → `app/eval/` (dataset, metrics, runner, A/B configs; CLI: `python -m app.eval`)
 
 ### Do NOT
 
@@ -194,6 +195,7 @@ backend/                — Python/FastAPI backend
     api/v1/            — FastAPI routers (auth, users, documents, conversations)
     services/          — business logic (llm chat, document, conversation)
     rag/               — RAG pipeline (chunker, embedder, retriever, ingest, reranker, hyde)
+    eval/              — evaluation pipeline (dataset, metrics, runner, configs; CLI entry point)
     tasks/             — Celery tasks (thin wrappers calling app.rag.ingest)
     utils/             — vector_db client, document_extractor, object storage (S3/MinIO)
   alembic/             — DB migrations
