@@ -23,6 +23,7 @@ email-validator==2.1.0
 
 # AI/ML
 openai==1.10.0
+sentence-transformers>=2.7.0
 
 # Vector DB
 qdrant-client==1.7.3

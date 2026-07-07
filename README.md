@@ -96,9 +96,16 @@ GET    /ready                         — readiness (DB + Redis + Qdrant)
 ## RAG Pipeline
 
 ```
-Ingest:  upload → extract text (PDF/DOCX/TXT/MD) → chunk → embed → upsert to Qdrant
-Chat:    query → embed → vector search (user-scoped) → top-5 context → LLM generate
+Ingest:  upload → extract text (PDF/DOCX/TXT/MD) → semantic chunk → embed → upsert to Qdrant
+Chat:    query → [HyDE] → embed → vector search (user-scoped, top-20) → [rerank] → top-5 → LLM generate
 ```
+
+| Stage | Technique | Toggle |
+| ----- | --------- | ------ |
+| Chunking | Recursive sentence-aware splitter (512 chars, 50 overlap) | Always on |
+| Embedding | OpenAI text-embedding-3-small (1536d) | Always on |
+| HyDE | LLM generates hypothetical answer → embed that | `HYDE_ENABLED` |
+| Reranker | Cross-encoder ms-marco-MiniLM-L-6-v2 (top-20 → top-5) | `RERANKER_ENABLED` |
 
 ## Development
 
@@ -127,6 +134,8 @@ alembic upgrade head
 | `OPENAI_API_KEY`         | OpenAI API key                  | required                |
 | `OPENAI_MODEL`           | Chat model                      | `gpt-4o-mini`           |
 | `QDRANT_URL`             | Qdrant endpoint                 | `http://localhost:6333` |
+| `RERANKER_ENABLED`       | Enable cross-encoder reranking  | `false`                 |
+| `HYDE_ENABLED`           | Enable HyDE query expansion     | `false`                 |
 | `RATE_LIMIT_PER_MINUTE`  | Per-IP rate limit               | `60`                    |
 | `MAX_UPLOAD_SIZE_MB`     | Max file upload size            | `20`                    |
 | `ENVIRONMENT`            | `development` or `production`   | `development`           |

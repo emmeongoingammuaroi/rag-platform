@@ -45,8 +45,9 @@ async def index_document(db: AsyncSession, document_id: UUID) -> None:
                 "user_id": str(doc.user_id),
                 "title": doc.title,
                 "content": chunk,
+                "chunk_index": i,
             }
-            for chunk in chunks
+            for i, chunk in enumerate(chunks)
         ]
 
         vector_db.upsert_vectors(vectors=embeddings, payloads=payloads)

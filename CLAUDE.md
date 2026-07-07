@@ -106,13 +106,13 @@ upload → extract text (PDF/DOCX/TXT/MD) → chunk → embed → upsert to Qdra
 
 ### Retrieval (current)
 ```
-query → embed → Qdrant search (filtered by user_id) → top-5 → inject as context → LLM generate
+query → [HyDE expand] → embed → Qdrant search (filtered by user_id, top-20) → [rerank] → top-5 → inject as context → LLM generate
 ```
 
-- **Chunker:** Sliding window, chunk_size=800, overlap=120. (Phase 3: upgrade to recursive sentence-aware)
+- **Chunker:** Recursive sentence-aware splitter (chunk_size=512, overlap=50). Separators: `\n\n` → `\n` → `. ` → word → char.
 - **Embedder:** OpenAI text-embedding-3-small (1536d).
-- **Reranker:** Not yet implemented (Phase 3.2)
-- **HyDE:** Not yet implemented (Phase 3.3)
+- **Reranker:** Cross-encoder `ms-marco-MiniLM-L-6-v2`. Toggle: `RERANKER_ENABLED=true|false` (default: off).
+- **HyDE:** LLM generates hypothetical answer → embed that instead of raw query. Toggle: `HYDE_ENABLED=true|false` (default: off). Fallback to raw embed on failure.
 - **Hybrid search:** Not yet implemented (Phase 3.4)
 
 ---
@@ -141,6 +141,13 @@ OPENAI_MAX_TOKENS=2000
 QDRANT_URL=http://qdrant:6333
 QDRANT_COLLECTION_NAME=documents
 VECTOR_DIMENSION=1536
+
+# RAG Pipeline
+RERANKER_ENABLED=false
+RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
+RERANKER_TOP_K=5
+RETRIEVER_INITIAL_TOP_K=20
+HYDE_ENABLED=false
 
 # Rate Limiting
 RATE_LIMIT_PER_MINUTE=60

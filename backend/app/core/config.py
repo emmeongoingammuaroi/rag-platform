@@ -74,6 +74,13 @@ class Settings(BaseSettings):
     STORAGE_DIR: str = "storage"
     MAX_UPLOAD_SIZE_MB: int = 20
 
+    # RAG Pipeline
+    RERANKER_ENABLED: bool = False
+    RERANKER_MODEL: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    RERANKER_TOP_K: int = 5
+    RETRIEVER_INITIAL_TOP_K: int = 20
+    HYDE_ENABLED: bool = False
+
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
 
