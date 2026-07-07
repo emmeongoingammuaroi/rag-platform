@@ -36,6 +36,7 @@ class DocumentInDB(DocumentBase):
     id: UUID
     file_path: str | None
     file_type: str | None
+    content_hash: str | None
     user_id: UUID
     chunk_count: int
     embedding_status: DocumentEmbeddingStatus

@@ -23,9 +23,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
+# Install runtime dependencies (libpq for postgres, tesseract for OCR, libmupdf deps)
 RUN apt-get update && apt-get install -y \
     libpq5 \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    libmupdf-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user

@@ -4,9 +4,9 @@
 
 Production-ready RAG (Retrieval-Augmented Generation) platform. Users upload documents (PDF/DOCX/TXT/MD), documents are processed asynchronously (extract → chunk → embed → store in vector DB), then users chat with AI that retrieves relevant context from their documents.
 
-**Stack:** Python 3.12 + FastAPI | PostgreSQL + SQLAlchemy 2.0 | Redis + Celery | Qdrant | OpenAI API
+**Stack:** Python 3.12 + FastAPI | PostgreSQL + SQLAlchemy 2.0 | Redis + Celery | Qdrant | MinIO (S3) | OpenAI API
 
-**Run:** `make up` (or `docker compose up`) → 6 services (postgres, redis, qdrant, api, celery_worker, web)
+**Run:** `make up` (or `docker compose up`) → 7 services (postgres, redis, qdrant, minio, api, celery_worker, web)
 
 **Monorepo:** `backend/` (Python/FastAPI) | `web/` (Vite + React SPA) | `infra/` (Terraform placeholder)
 
@@ -46,7 +46,8 @@ app/
 - **Text chunking** → `app/rag/chunker.py`
 - **Embeddings** → `app/rag/embedder.py` (OpenAI embedding wrapper)
 - **RAG retrieval** → `app/rag/retriever.py` (embed query → vector search → format context)
-- **Text extraction (PDF/DOCX/TXT)** → `app/utils/document_extractor.py`
+- **Text extraction (PDF/DOCX/TXT)** → `app/utils/document_extractor.py` (PyMuPDF + pdfplumber tables + OCR)
+- **Object storage (S3/MinIO)** → `app/utils/storage.py` (boto3 client, lazy init)
 - **LLM chat** → `app/services/llm.py` (chat completions + streaming only)
 - **Vector DB operations** → `app/utils/vector_db.py`
 - **Conversation/message CRUD** → `app/services/conversation.py`
@@ -65,6 +66,7 @@ app/
 - Leak exception details in production responses (`detail=str(e)` → generic message)
 - Use `datetime.utcnow()` (use `datetime.now(timezone.utc)`)
 - Use `@app.on_event()` (use `lifespan` context manager)
+- Store files on local filesystem (use object storage via `app/utils/storage.py`)
 
 ---
 
@@ -101,7 +103,9 @@ app/
 
 ### Ingest (async via Celery)
 ```
-upload → extract text (PDF/DOCX/TXT/MD) → chunk → embed → upsert to Qdrant
+upload → dedup (SHA-256) → store in MinIO → Celery task:
+  download from MinIO → extract text (PyMuPDF + tables + OCR) → chunk → hash chunks →
+  diff vs existing vectors → embed only new/changed chunks → upsert to Qdrant
 ```
 
 ### Retrieval (current)
@@ -109,6 +113,9 @@ upload → extract text (PDF/DOCX/TXT/MD) → chunk → embed → upsert to Qdra
 query → [HyDE expand] → embed → Qdrant search (filtered by user_id, top-20) → [rerank] → top-5 → inject as context → LLM generate
 ```
 
+- **PDF extraction:** PyMuPDF for text + pdfplumber for table extraction (markdown tables).
+- **OCR:** pytesseract for scanned PDFs (pages with images but no text). Toggle: `OCR_ENABLED=true|false` (default: off).
+- **Deduplication:** SHA-256 hash of file content. Same file → 409 Conflict. Incremental re-index: chunk-level hash comparison, only re-embed changed chunks.
 - **Chunker:** Recursive sentence-aware splitter (chunk_size=512, overlap=50). Separators: `\n\n` → `\n` → `. ` → word → char.
 - **Embedder:** OpenAI text-embedding-3-small (1536d).
 - **Reranker:** Cross-encoder `ms-marco-MiniLM-L-6-v2`. Toggle: `RERANKER_ENABLED=true|false` (default: off).
@@ -142,6 +149,13 @@ QDRANT_URL=http://qdrant:6333
 QDRANT_COLLECTION_NAME=documents
 VECTOR_DIMENSION=1536
 
+# Object Storage (S3/MinIO)
+S3_ENDPOINT_URL=http://minio:9000
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_BUCKET_NAME=documents
+S3_REGION=us-east-1
+
 # RAG Pipeline
 RERANKER_ENABLED=false
 RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
@@ -149,11 +163,14 @@ RERANKER_TOP_K=5
 RETRIEVER_INITIAL_TOP_K=20
 HYDE_ENABLED=false
 
+# OCR
+OCR_ENABLED=false
+OCR_LANGUAGE=eng
+
 # Rate Limiting
 RATE_LIMIT_PER_MINUTE=60
 
-# Storage
-STORAGE_DIR=storage
+# Upload
 MAX_UPLOAD_SIZE_MB=20
 
 # App
@@ -178,7 +195,7 @@ backend/                — Python/FastAPI backend
     services/          — business logic (llm chat, document, conversation)
     rag/               — RAG pipeline (chunker, embedder, retriever, ingest, reranker, hyde)
     tasks/             — Celery tasks (thin wrappers calling app.rag.ingest)
-    utils/             — vector_db client, document_extractor
+    utils/             — vector_db client, document_extractor, object storage (S3/MinIO)
   alembic/             — DB migrations
   tests/               — pytest
   Dockerfile
@@ -240,7 +257,10 @@ GET    /ready                         — readiness check (verify DB, Redis, Qdr
 - RAG always enabled — every message triggers retrieval, no toggle
 - Hyperparameters (temperature, top_k, model) are server-side config, not in request payload
 - Vector search always filtered by user_id — mandatory data isolation
-- Lazy-init for external services (Qdrant) — no connection on import
+- Lazy-init for external services (Qdrant, MinIO) — no connection on import
 - Explicit commit in routers — `get_db()` never auto-commits
 - RAG logic in `app/rag/` — tasks are thin Celery wrappers, pipeline logic is testable without Celery
 - Structured errors via `AppError` — consistent JSON format, no exception leaking in production
+- Object storage (MinIO local, S3 prod) — single S3-compatible code path, no local filesystem storage
+- File deduplication via SHA-256 content hash — prevents duplicate uploads per user
+- Incremental re-indexing — chunk-level hash comparison avoids re-embedding unchanged content

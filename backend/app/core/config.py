@@ -70,8 +70,14 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_NAME: str = "documents"
     VECTOR_DIMENSION: int = 1536
 
-    # Local storage
-    STORAGE_DIR: str = "storage"
+    # Object Storage (S3/MinIO)
+    S3_ENDPOINT_URL: str = "http://minio:9000"
+    S3_ACCESS_KEY: str = "minioadmin"
+    S3_SECRET_KEY: str = "minioadmin"
+    S3_BUCKET_NAME: str = "documents"
+    S3_REGION: str = "us-east-1"
+
+    # Upload limits
     MAX_UPLOAD_SIZE_MB: int = 20
 
     # RAG Pipeline
@@ -80,6 +86,10 @@ class Settings(BaseSettings):
     RERANKER_TOP_K: int = 5
     RETRIEVER_INITIAL_TOP_K: int = 20
     HYDE_ENABLED: bool = False
+
+    # OCR
+    OCR_ENABLED: bool = False
+    OCR_LANGUAGE: str = "eng"
 
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60

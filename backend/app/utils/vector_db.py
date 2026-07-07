@@ -11,6 +11,7 @@ from qdrant_client.models import (
     Filter,
     FilterSelector,
     MatchValue,
+    PointIdsList,
     PointStruct,
     VectorParams,
 )
@@ -139,6 +140,56 @@ class VectorDB:
             }
             for result in results
         ]
+
+    def get_by_document_id(self, document_id: UUID) -> list[dict[str, Any]]:
+        """Retrieve all vectors belonging to a specific document.
+
+        Args:
+            document_id: The document whose vectors to retrieve.
+
+        Returns:
+            List of dicts with keys: id, payload.
+        """
+        results: list[dict[str, Any]] = []
+        offset: str | None = None
+        while True:
+            scroll_kwargs: dict[str, Any] = {
+                "collection_name": self.collection_name,
+                "scroll_filter": Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=str(document_id)),
+                        )
+                    ]
+                ),
+                "limit": 100,
+                "with_payload": True,
+                "with_vectors": False,
+            }
+            if offset is not None:
+                scroll_kwargs["offset"] = offset
+            points, next_offset = self.client.scroll(**scroll_kwargs)
+            for point in points:
+                results.append({"id": point.id, "payload": point.payload or {}})
+            if next_offset is None:
+                break
+            offset = next_offset
+        return results
+
+    def delete_by_ids(self, point_ids: list[str]) -> None:
+        """Delete vectors by their point IDs.
+
+        Args:
+            point_ids: List of Qdrant point IDs to delete.
+        """
+        if not point_ids:
+            return
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=PointIdsList(points=point_ids),
+        )
+        logger.info(f"Deleted {len(point_ids)} vectors by ID")
 
     def delete_by_document_id(self, document_id: UUID) -> None:
         """Delete all vectors belonging to a specific document.

@@ -28,6 +28,7 @@ class Document(UUIDTimestampBase):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     file_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     user_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id"),

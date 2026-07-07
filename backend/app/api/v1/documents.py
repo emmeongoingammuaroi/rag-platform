@@ -1,8 +1,8 @@
 """Document management endpoints."""
 
+import hashlib
 import os
 from math import ceil
-from pathlib import Path
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -15,7 +15,12 @@ from app.db.session import get_db
 from app.models.user import User as UserModel
 from app.schemas.document import Document, DocumentCreate, DocumentList, DocumentUpdate
 from app.services.document import DocumentService
-from app.tasks.ingestion import delete_document_vectors, task_index_document, task_ingest_document
+from app.tasks.ingestion import (
+    delete_document_task,
+    task_index_document,
+    task_ingest_document,
+)
+from app.utils.storage import object_storage
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -54,24 +59,34 @@ async def upload_document(
             detail=f"File too large. Maximum size: {settings.MAX_UPLOAD_SIZE_MB}MB",
         )
 
+    content_hash = hashlib.sha256(content).hexdigest()
+
+    existing = await DocumentService.get_by_content_hash(
+        db, content_hash=content_hash, user_id=current_user.id
+    )
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Duplicate file already uploaded as '{existing.title}'",
+        )
+
     safe_filename = os.path.basename(file.filename).replace("..", "").strip()
     if not safe_filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    storage_dir = Path(settings.STORAGE_DIR) / "documents" / str(current_user.id)
-    storage_dir.mkdir(parents=True, exist_ok=True)
-
     file_id = uuid4().hex
-    stored_path = storage_dir / f"{file_id}.{ext}"
-    stored_path.write_bytes(content)
+    object_key = f"{current_user.id}/{file_id}.{ext}"
+    mime = file.content_type or "application/octet-stream"
+    object_storage.upload(object_key, content, content_type=mime)
 
     doc_in = DocumentCreate(
         title=os.path.splitext(os.path.basename(file.filename))[0],
         content="",
     )
     doc = await DocumentService.create(db, user_id=current_user.id, doc_in=doc_in)
-    doc.file_path = str(stored_path)
+    doc.file_path = object_key
     doc.file_type = ext
+    doc.content_hash = content_hash
     await db.flush()
     await db.refresh(doc)
 
@@ -154,7 +169,8 @@ async def delete_document(
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    file_path = doc.file_path
     await DocumentService.delete(db, doc=doc)
     await db.commit()
-    delete_document_vectors.delay(str(document_id))
+    delete_document_task.delay(str(document_id), file_path)
     return None

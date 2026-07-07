@@ -28,6 +28,29 @@ class DocumentService:
         return doc
 
     @staticmethod
+    async def get_by_content_hash(
+        db: AsyncSession, *, content_hash: str, user_id: UUID
+    ) -> Document | None:
+        """Find an existing document with the same content hash for a user.
+
+        Args:
+            db: Async database session.
+            content_hash: SHA-256 hash of the file content.
+            user_id: Owner constraint.
+
+        Returns:
+            The Document if a duplicate exists, else None.
+        """
+        result = await db.execute(
+            select(Document).where(
+                Document.content_hash == content_hash,
+                Document.user_id == user_id,
+            )
+        )
+        doc: Document | None = result.scalar_one_or_none()
+        return doc
+
+    @staticmethod
     async def get_by_id_for_user(
         db: AsyncSession, *, document_id: UUID, user_id: UUID
     ) -> Document | None:

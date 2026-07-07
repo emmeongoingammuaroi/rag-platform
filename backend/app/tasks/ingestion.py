@@ -1,6 +1,7 @@
 """Document ingestion Celery tasks — thin wrappers around app.rag.ingest."""
 
 import asyncio
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from uuid import UUID
@@ -10,7 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.rag.ingest import index_document, ingest_document
+from app.utils.storage import object_storage
 from app.utils.vector_db import vector_db
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -55,6 +59,12 @@ def task_index_document(document_id: str) -> None:
     asyncio.run(_run())
 
 
-@celery_app.task(name="documents.delete_vectors")
-def delete_document_vectors(document_id: str) -> None:
+@celery_app.task(name="documents.delete")
+def delete_document_task(document_id: str, file_path: str | None = None) -> None:
+    """Delete vectors and the stored file for a document."""
     vector_db.delete_by_document_id(UUID(document_id))
+    if file_path:
+        try:
+            object_storage.delete(file_path)
+        except Exception as e:
+            logger.warning(f"Failed to delete file {file_path} from storage: {e}")
