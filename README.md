@@ -35,7 +35,7 @@ Requires Docker and a `.env` file (copy from `.env.example`).
 ```text
 backend/
   app/
-    api/v1/          — Routers (auth, users, conversations, documents)
+    api/v1/          — Routers (auth, users, conversations, documents, metrics)
     core/            — Config, auth (FastAPI-Users), rate limiting, middleware, exceptions
     services/        — Business logic (llm chat, conversation, document)
     rag/             — RAG pipeline (chunker, embedder, retriever, ingest)
@@ -43,7 +43,7 @@ backend/
     tasks/           — Celery tasks (thin wrappers around rag.ingest)
     models/          — SQLAlchemy ORM models
     schemas/         — Pydantic request/response schemas
-    utils/           — Vector DB client, document extractor, object storage
+    utils/           — Vector DB client, document extractor, object storage, tracing, metrics
     db/              — Engine, session factory
 
 web/                 — React SPA
@@ -88,6 +88,12 @@ GET    /api/v1/conversations/{id}     — with messages
 PATCH  /api/v1/conversations/{id}     — update title
 DELETE /api/v1/conversations/{id}
 POST   /api/v1/conversations/{id}/messages  — send message (auto RAG retrieval)
+```
+
+### Metrics
+
+```text
+GET    /api/v1/metrics/summary        — aggregated stats (requests, latency, RAG metrics)
 ```
 
 ### System
@@ -141,6 +147,19 @@ docker compose exec api python -m app.eval \
 
 Metrics: Precision@k, Recall@k, MRR, Hit Rate, Faithfulness (LLM-as-judge), Answer Relevance, Latency p50/p95/p99.
 
+## Observability
+
+RAG pipeline tracing with structured JSON spans (embed_query, vector_search, rerank, llm_generate). Each span records latency, token counts, and retrieval scores.
+
+```bash
+# Get aggregated metrics
+curl http://localhost:8010/api/v1/metrics/summary
+```
+
+Returns: total requests, avg/p95 latency, error rate, RAG-specific latency, avg retrieval score.
+
+Configure via `OBSERVABILITY_PROVIDER`: `json` (structured logs) or `none` (disabled).
+
 ## Development
 
 ```bash
@@ -177,6 +196,7 @@ alembic upgrade head
 | `RERANKER_ENABLED`       | Enable cross-encoder reranking  | `false`                 |
 | `HYDE_ENABLED`           | Enable HyDE query expansion     | `false`                 |
 | `RATE_LIMIT_PER_MINUTE`  | Per-IP rate limit               | `60`                    |
+| `OBSERVABILITY_PROVIDER` | Tracing provider (`json`/`none`)| `json`                  |
 | `MAX_UPLOAD_SIZE_MB`     | Max file upload size            | `20`                    |
 | `ENVIRONMENT`            | `development` or `production`   | `development`           |
 

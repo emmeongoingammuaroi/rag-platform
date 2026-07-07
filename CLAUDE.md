@@ -54,8 +54,11 @@ app/
 - **Config/env vars** → `app/core/config.py` (single Pydantic Settings class)
 - **Domain exceptions** → `app/core/exceptions.py` (AppError hierarchy)
 - **Rate limiting** → `app/core/rate_limit.py` (slowapi + Redis)
-- **Request correlation** → `app/core/middleware.py` (X-Request-ID)
+- **Request correlation** → `app/core/middleware.py` (X-Request-ID + MetricsMiddleware)
 - **RAG evaluation** → `app/eval/` (dataset, metrics, runner, A/B configs; CLI: `python -m app.eval`)
+- **RAG pipeline tracing** → `app/utils/tracing.py` (trace spans: embed_query, vector_search, rerank, llm_generate)
+- **Metrics collection** → `app/utils/metrics.py` (in-memory request/RAG metrics aggregator)
+- **Metrics endpoint** → `app/api/v1/metrics.py` (GET /api/v1/metrics/summary)
 
 ### Do NOT
 
@@ -171,6 +174,9 @@ OCR_LANGUAGE=eng
 # Rate Limiting
 RATE_LIMIT_PER_MINUTE=60
 
+# Observability
+OBSERVABILITY_PROVIDER=json  # json|none
+
 # Upload
 MAX_UPLOAD_SIZE_MB=20
 
@@ -192,12 +198,12 @@ backend/                — Python/FastAPI backend
     db/                — SQLAlchemy engine, session, base model
     models/            — ORM models (user, document, conversation, message)
     schemas/           — Pydantic request/response models (user, document, conversation)
-    api/v1/            — FastAPI routers (auth, users, documents, conversations)
+    api/v1/            — FastAPI routers (auth, users, documents, conversations, metrics)
     services/          — business logic (llm chat, document, conversation)
     rag/               — RAG pipeline (chunker, embedder, retriever, ingest, reranker, hyde)
     eval/              — evaluation pipeline (dataset, metrics, runner, configs; CLI entry point)
     tasks/             — Celery tasks (thin wrappers calling app.rag.ingest)
-    utils/             — vector_db client, document_extractor, object storage (S3/MinIO)
+    utils/             — vector_db client, document_extractor, object storage, tracing, metrics
   alembic/             — DB migrations
   tests/               — pytest
   Dockerfile
@@ -245,6 +251,9 @@ GET    /api/v1/conversations/{id}                   — get with messages
 PATCH  /api/v1/conversations/{id}                   — update title
 DELETE /api/v1/conversations/{id}                   — delete
 POST   /api/v1/conversations/{id}/messages          — send message + RAG retrieval
+
+# Metrics
+GET    /api/v1/metrics/summary          — aggregated stats (requests, latency, RAG metrics)
 
 # System
 GET    /health                        — liveness check
