@@ -8,7 +8,7 @@ Production-ready RAG (Retrieval-Augmented Generation) platform. Users upload doc
 
 **Run:** `make up` (or `docker compose up`) → 7 services (postgres, redis, qdrant, minio, api, celery_worker, web)
 
-**Monorepo:** `backend/` (Python/FastAPI) | `web/` (Vite + React SPA) | `infra/` (Terraform placeholder)
+**Monorepo:** `backend/` (Python/FastAPI) | `web/` (Vite + React SPA) | `infra/` (Terraform AWS) | `scripts/` (deploy/teardown)
 
 ---
 
@@ -215,7 +215,9 @@ web/                   — Vite + React SPA (TypeScript, Tailwind)
   src/
   Dockerfile           — multi-target (dev / prod)
 
-infra/                 — Terraform placeholder (AWS: ECS, RDS, ElastiCache, ALB, S3)
+infra/                 — Terraform AWS (VPC, ECS Fargate, RDS, ElastiCache, ALB, S3, ECR, IAM)
+scripts/               — deploy.sh, teardown.sh, setup-state.sh
+.github/workflows/     — CI (ci-cd.yml) + Deploy (deploy.yml: manual trigger, deploy/destroy)
 
 docker-compose.yml     — orchestrates all services from root
 Makefile               — root shortcuts (make up/down/build/migrate)

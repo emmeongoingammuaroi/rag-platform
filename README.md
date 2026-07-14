@@ -230,6 +230,31 @@ Returns: total requests, avg/p95 latency, error rate, RAG-specific latency, avg 
 
 Configure via `OBSERVABILITY_PROVIDER`: `json` (structured logs) or `none` (disabled).
 
+## AWS Deployment
+
+Terraform-managed infrastructure on AWS (ECS Fargate). Estimated cost: ~$0.17/hr.
+
+```bash
+# One-time: create Terraform state backend (S3 + DynamoDB)
+./scripts/setup-state.sh
+
+# Configure secrets
+cp infra/terraform.tfvars.example infra/terraform.tfvars
+# Edit terraform.tfvars with your values
+
+# Deploy (infra + build + push + migrate + deploy ECS)
+./scripts/deploy.sh
+
+# Teardown (destroy all AWS resources)
+./scripts/teardown.sh
+```
+
+**Services:** ECS Fargate (API + Worker + Web) | RDS PostgreSQL (db.t3.micro) | ElastiCache Redis (cache.t3.micro) | ALB | S3 | Qdrant Cloud (free tier)
+
+**CI/CD:** GitHub Actions — `ci-cd.yml` (lint + test on push/PR) → `deploy.yml` (manual trigger: deploy or destroy)
+
+See [infra/README.md](infra/README.md) for full details.
+
 ## Development
 
 ```bash

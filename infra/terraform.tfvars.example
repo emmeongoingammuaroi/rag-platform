@@ -1,0 +1,26 @@
+aws_region    = "ap-southeast-1"
+environment   = "production"
+project_name  = "rag-platform"
+
+# Database
+db_username = "postgres"
+db_password = "CHANGE_ME_strong_password_here"
+db_name     = "ai_rag_db"
+
+# Application
+secret_key     = "CHANGE_ME_random_string_here"
+openai_api_key = "sk-..."
+
+# Qdrant Cloud (free tier)
+qdrant_url     = "https://your-cluster.cloud.qdrant.io:6333"
+qdrant_api_key = ""
+
+# ECS sizing (demo: minimal)
+ecs_api_cpu       = 512
+ecs_api_memory    = 1024
+ecs_worker_cpu    = 512
+ecs_worker_memory = 1024
+
+# Instance sizes (demo: smallest)
+db_instance_class = "db.t3.micro"
+redis_node_type   = "cache.t3.micro"

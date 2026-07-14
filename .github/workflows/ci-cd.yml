@@ -60,7 +60,6 @@ jobs:
 
       - name: Run tests
         run: pytest --no-header -q
-        continue-on-error: true
 
   web-lint:
     runs-on: ubuntu-latest

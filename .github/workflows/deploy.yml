@@ -1,0 +1,181 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Deploy action"
+        required: true
+        default: "deploy"
+        type: choice
+        options:
+          - deploy
+          - destroy
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECS_CLUSTER: rag-platform
+
+jobs:
+  deploy:
+    if: inputs.action == 'deploy'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+
+      - name: Terraform apply
+        working-directory: infra
+        run: |
+          terraform init
+          terraform apply -auto-approve \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="secret_key=${{ secrets.SECRET_KEY }}" \
+            -var="openai_api_key=${{ secrets.OPENAI_API_KEY }}" \
+            -var="qdrant_url=${{ secrets.QDRANT_URL }}" \
+            -var="qdrant_api_key=${{ secrets.QDRANT_API_KEY }}"
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set ECR URLs
+        id: ecr
+        run: |
+          echo "api_repo=${{ steps.ecr-login.outputs.registry }}/rag-platform-api" >> $GITHUB_OUTPUT
+          echo "web_repo=${{ steps.ecr-login.outputs.registry }}/rag-platform-web" >> $GITHUB_OUTPUT
+
+      - name: Build and push API image
+        run: |
+          docker build -t ${{ steps.ecr.outputs.api_repo }}:latest \
+            -t ${{ steps.ecr.outputs.api_repo }}:${{ github.sha }} \
+            ./backend
+          docker push ${{ steps.ecr.outputs.api_repo }}:latest
+          docker push ${{ steps.ecr.outputs.api_repo }}:${{ github.sha }}
+
+      - name: Build and push Web image
+        run: |
+          docker build -t ${{ steps.ecr.outputs.web_repo }}:latest \
+            -t ${{ steps.ecr.outputs.web_repo }}:${{ github.sha }} \
+            --target prod \
+            --build-arg VITE_API_URL=${{ secrets.API_URL }} \
+            ./web
+          docker push ${{ steps.ecr.outputs.web_repo }}:latest
+          docker push ${{ steps.ecr.outputs.web_repo }}:${{ github.sha }}
+
+      - name: Run database migration
+        run: |
+          TASK_ARN=$(aws ecs run-task \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --task-definition rag-platform-migrate \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=${{ secrets.PRIVATE_SUBNETS }},securityGroups=[${{ secrets.ECS_SECURITY_GROUP }}],assignPublicIp=DISABLED}" \
+            --query 'tasks[0].taskArn' \
+            --output text)
+          echo "Migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN
+          EXIT_CODE=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Migration failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+
+      - name: Deploy API service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service rag-platform-api \
+            --force-new-deployment \
+            --query 'service.serviceName' \
+            --output text
+
+      - name: Deploy Worker service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service rag-platform-worker \
+            --force-new-deployment \
+            --query 'service.serviceName' \
+            --output text
+
+      - name: Deploy Web service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service rag-platform-web \
+            --force-new-deployment \
+            --query 'service.serviceName' \
+            --output text
+
+      - name: Wait for API service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services rag-platform-api
+          echo "API service is stable"
+
+      - name: Smoke test
+        run: |
+          ALB_URL=$(aws elbv2 describe-load-balancers \
+            --names rag-platform-alb \
+            --query 'LoadBalancers[0].DNSName' \
+            --output text)
+          echo "ALB URL: http://$ALB_URL"
+          for i in {1..5}; do
+            if curl -sf "http://$ALB_URL/health" > /dev/null; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          echo "Smoke test failed"
+          exit 1
+
+  destroy:
+    if: inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+
+      - name: Terraform destroy
+        working-directory: infra
+        run: |
+          terraform init
+          terraform destroy -auto-approve \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="secret_key=${{ secrets.SECRET_KEY }}" \
+            -var="openai_api_key=${{ secrets.OPENAI_API_KEY }}" \
+            -var="qdrant_url=${{ secrets.QDRANT_URL }}" \
+            -var="qdrant_api_key=${{ secrets.QDRANT_API_KEY }}"
