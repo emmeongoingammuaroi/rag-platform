@@ -109,9 +109,8 @@ services:
       dockerfile: Dockerfile
     image: ${RAG_PLATFORM_IMAGE:-ghcr.io/your-org/rag-platform-api}:${RAG_PLATFORM_TAG:-latest}
     container_name: rag-platform-celery-worker
-    command: ["celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=INFO"]
-    healthcheck:
-      disable: true
+    command: ["celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=INFO", "--without-heartbeat", "--without-mingle"]
+    stop_grace_period: 30s
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ai_rag_db
       - REDIS_URL=redis://redis:6379/0

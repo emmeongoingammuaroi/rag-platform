@@ -32,6 +32,17 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info(f"Debug mode: {settings.DEBUG}")
     yield
     logger.info(f"Shutting down {settings.PROJECT_NAME}")
+    # Close DB engine
+    from app.db.session import engine
+
+    await engine.dispose()
+    logger.info("Database engine disposed")
+    # Close Qdrant client
+    try:
+        vector_db.close()
+        logger.info("Qdrant client closed")
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -42,6 +53,8 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    swagger_ui_init_oauth={"usePkceWithAuthorizationCodeGrant": True},
+    swagger_ui_parameters={"persistAuthorization": True},
 )
 
 app.state.limiter = limiter

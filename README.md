@@ -32,6 +32,76 @@ Requires Docker and a `.env` file (copy from `.env.example`).
 
 ## Architecture
 
+```mermaid
+graph TB
+    subgraph Client
+        WEB[React SPA]
+    end
+
+    subgraph Backend
+        API[FastAPI API]
+        CELERY[Celery Worker]
+    end
+
+    subgraph Data Stores
+        PG[(PostgreSQL)]
+        REDIS[(Redis)]
+        QDRANT[(Qdrant)]
+        MINIO[(MinIO / S3)]
+    end
+
+    subgraph External
+        OPENAI[OpenAI API]
+    end
+
+    WEB -->|REST| API
+    API -->|async tasks| REDIS
+    REDIS -->|consume| CELERY
+    API -->|queries| PG
+    CELERY -->|queries| PG
+    API -->|vector search| QDRANT
+    CELERY -->|upsert vectors| QDRANT
+    CELERY -->|download files| MINIO
+    API -->|upload files| MINIO
+    API -->|chat completions| OPENAI
+    CELERY -->|embeddings| OPENAI
+```
+
+### Ingest Pipeline
+
+```mermaid
+graph LR
+    A[Upload] --> B[Dedup SHA-256]
+    B --> C[Store in MinIO]
+    C --> D[Celery Task]
+    D --> E[Extract Text]
+    E --> F[Chunk]
+    F --> G[Hash Chunks]
+    G --> H{Changed?}
+    H -->|Yes| I[Embed via OpenAI]
+    H -->|No| J[Skip]
+    I --> K[Upsert to Qdrant]
+```
+
+### Retrieval Pipeline
+
+```mermaid
+graph LR
+    Q[User Query] --> H{HyDE?}
+    H -->|Yes| H1[LLM Hypothetical Answer]
+    H1 --> E[Embed]
+    H -->|No| E
+    E --> V[Qdrant Search top-20]
+    V --> R{Rerank?}
+    R -->|Yes| R1[Cross-Encoder top-5]
+    R -->|No| T[top-5]
+    R1 --> C[Context Injection]
+    T --> C
+    C --> L[LLM Generate]
+```
+
+### Project Structure
+
 ```text
 backend/
   app/
@@ -46,7 +116,7 @@ backend/
     utils/           — Vector DB client, document extractor, object storage, tracing, metrics
     db/              — Engine, session factory
 
-web/                 — React SPA
+web/                 — React SPA (Vite + React 19 + TypeScript + Tailwind 4)
 infra/               — Terraform (AWS deployment)
 ```
 
@@ -199,6 +269,34 @@ alembic upgrade head
 | `OBSERVABILITY_PROVIDER` | Tracing provider (`json`/`none`)| `json`                  |
 | `MAX_UPLOAD_SIZE_MB`     | Max file upload size            | `20`                    |
 | `ENVIRONMENT`            | `development` or `production`   | `development`           |
+
+## Technical Decisions
+
+| Decision | Rationale |
+| -------- | --------- |
+| **Qdrant** over Pinecone/Weaviate | Open-source, self-hosted, native filtering by payload fields (user isolation), no vendor lock-in |
+| **Celery + Redis** for async | Document ingestion is CPU/IO-heavy (extraction, OCR, embedding API calls). Keeps API response times fast |
+| **FastAPI-Users** over custom auth | Production-grade JWT auth with verify/reset flows out of the box. No custom security code to audit |
+| **MinIO (S3-compatible)** | Same code path for local dev and production AWS S3. No filesystem dependency in containers |
+| **Recursive chunking** over fixed-size | Respects sentence/paragraph boundaries. Better retrieval quality than naive character splitting |
+| **Two-stage retrieval** (bi-encoder + cross-encoder) | Bi-encoder is fast but imprecise. Cross-encoder reranking on top-20 candidates improves precision significantly |
+| **HyDE** | Short queries match poorly against long documents. Generating a hypothetical answer bridges the semantic gap |
+| **Incremental re-indexing** | Only re-embed changed chunks on document update. Saves embedding API costs and processing time |
+| **User-scoped vector search** | Mandatory `user_id` filter on every Qdrant query. Prevents cross-tenant data leakage |
+| **Structured JSON tracing** | Lightweight observability without external dependencies. Each RAG span (embed, search, rerank, generate) logged with latency and scores |
+
+## Frontend
+
+React SPA with a ChatGPT-style interface:
+
+- **Chat-centric layout** — conversations in left sidebar, full-width message area
+- **Markdown rendering** — code blocks with syntax highlighting and copy button
+- **Citations** — source documents shown under each AI response with relevance scores
+- **Document management** — drag-and-drop upload, status tracking (pending/processing/ready/failed)
+- **Dark mode** — system preference detection + manual toggle
+- **Responsive** — collapsible sidebar for mobile
+
+Tech: React 19, TypeScript, Tailwind CSS 4, Zustand, React Router, react-markdown.
 
 ## License
 
