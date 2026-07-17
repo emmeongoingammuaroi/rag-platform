@@ -9,13 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.config import settings
 
 # Create async engine
-engine = create_async_engine(
-    settings.async_database_url,
-    echo=settings.DB_ECHO,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
-)
+_engine_kwargs: dict = {
+    "echo": settings.DB_ECHO,
+    "pool_pre_ping": True,
+}
+if settings.async_database_url.startswith("postgresql"):
+    _engine_kwargs["pool_size"] = 10
+    _engine_kwargs["max_overflow"] = 20
+
+engine = create_async_engine(settings.async_database_url, **_engine_kwargs)
 
 # Create async session factory
 AsyncSessionLocal = async_sessionmaker(
