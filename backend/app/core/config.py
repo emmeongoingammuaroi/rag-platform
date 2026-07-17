@@ -3,7 +3,7 @@
 import json
 from typing import List
 
-from pydantic import AnyHttpUrl, PostgresDsn, RedisDsn, field_validator
+from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,11 +29,11 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # Database
-    DATABASE_URL: PostgresDsn
+    DATABASE_URL: str
     DB_ECHO: bool = False
 
     # Redis
-    REDIS_URL: RedisDsn
+    REDIS_URL: str
 
     # Security
     SECRET_KEY: str
