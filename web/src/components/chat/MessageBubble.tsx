@@ -2,7 +2,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { Copy, Check, FileText } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import { useState } from "react";
 import type { Message } from "../../lib/types";
 
@@ -42,31 +42,6 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         </ReactMarkdown>
       </div>
 
-      {/* Sources / Citations */}
-      {message.sources && message.sources.length > 0 && (
-        <div className="border-t border-gray-100 dark:border-gray-800 pt-3 mt-3">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
-            Sources
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {message.sources.map((source, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-md text-xs text-gray-600 dark:text-gray-400"
-                title={source.chunk_text}
-              >
-                <FileText size={12} />
-                <span className="truncate max-w-[150px]">
-                  {source.document_title}
-                </span>
-                <span className="text-gray-400 dark:text-gray-500">
-                  {(source.score * 100).toFixed(0)}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

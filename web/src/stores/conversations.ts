@@ -80,10 +80,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     // Add user message optimistically
     const userMessage: Message = {
       id: crypto.randomUUID(),
+      conversation_id: conversationId,
       role: "user",
       content,
-      sources: null,
+      model: null,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
     set((s) => ({
@@ -108,7 +110,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         currentConversation: s.currentConversation
           ? {
               ...s.currentConversation,
-              messages: [...s.currentConversation.messages, data.message],
+              messages: [...s.currentConversation.messages, data.assistant_message],
             }
           : null,
       }));

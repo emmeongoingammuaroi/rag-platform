@@ -15,7 +15,7 @@ async def retrieve(
     query: str,
     user_id: UUID,
     top_k: int = 5,
-    score_threshold: float = 0.7,
+    score_threshold: float = 0.3,
 ) -> list[dict[str, Any]]:
     """Retrieve relevant document chunks for a user query.
 

@@ -8,12 +8,14 @@ export interface User {
 
 export interface Document {
   id: string;
-  filename: string;
-  file_type: string;
-  file_size: number;
-  status: "pending" | "processing" | "ready" | "failed";
+  title: string;
+  content: string;
+  file_path: string | null;
+  file_type: string | null;
   content_hash: string | null;
+  user_id: string;
   chunk_count: number;
+  embedding_status: "pending" | "processing" | "completed" | "failed";
   created_at: string;
   updated_at: string;
 }
@@ -23,7 +25,7 @@ export interface DocumentList {
   total: number;
   page: number;
   page_size: number;
-  total_pages: number;
+  pages: number;
 }
 
 export interface Conversation {
@@ -38,22 +40,17 @@ export interface ConversationList {
   total: number;
   page: number;
   page_size: number;
-  total_pages: number;
+  pages: number;
 }
 
 export interface Message {
   id: string;
-  role: "user" | "assistant";
+  conversation_id: string;
+  role: string;
   content: string;
-  sources: Source[] | null;
+  model: string | null;
   created_at: string;
-}
-
-export interface Source {
-  document_id: string;
-  document_title: string;
-  chunk_text: string;
-  score: number;
+  updated_at: string;
 }
 
 export interface ConversationDetail extends Conversation {
@@ -61,6 +58,6 @@ export interface ConversationDetail extends Conversation {
 }
 
 export interface SendMessageResponse {
-  message: Message;
-  sources: Source[];
+  conversation_id: string;
+  assistant_message: Message;
 }

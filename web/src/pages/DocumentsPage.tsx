@@ -43,7 +43,7 @@ export function DocumentsPage() {
   };
 
   const handleDelete = async (doc: Document) => {
-    if (!confirm(`Delete "${doc.filename}"? This cannot be undone.`)) return;
+    if (!confirm(`Delete "${doc.title}"? This cannot be undone.`)) return;
     try {
       await api.delete(`/api/v1/documents/${doc.id}`);
       setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
@@ -127,14 +127,14 @@ export function DocumentsPage() {
                 <FileText size={18} className="shrink-0 text-gray-400" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                    {doc.filename}
+                    {doc.title}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {formatFileSize(doc.file_size)} · {doc.chunk_count} chunks ·{" "}
+                    {doc.file_type ?? "unknown"} · {doc.chunk_count} chunks ·{" "}
                     {new Date(doc.created_at).toLocaleDateString()}
                   </p>
                 </div>
-                <StatusBadge status={doc.status} />
+                <StatusBadge status={doc.embedding_status} />
                 <button
                   onClick={() => handleDelete(doc)}
                   className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
@@ -151,11 +151,11 @@ export function DocumentsPage() {
   );
 }
 
-function StatusBadge({ status }: { status: Document["status"] }) {
+function StatusBadge({ status }: { status: Document["embedding_status"] }) {
   const config = {
     pending: { icon: Clock, color: "text-yellow-600 dark:text-yellow-400", label: "Pending" },
     processing: { icon: Loader2, color: "text-blue-600 dark:text-blue-400", label: "Processing" },
-    ready: { icon: CheckCircle, color: "text-green-600 dark:text-green-400", label: "Ready" },
+    completed: { icon: CheckCircle, color: "text-green-600 dark:text-green-400", label: "Completed" },
     failed: { icon: AlertCircle, color: "text-red-600 dark:text-red-400", label: "Failed" },
   };
   const { icon: Icon, color, label } = config[status];
@@ -166,10 +166,4 @@ function StatusBadge({ status }: { status: Document["status"] }) {
       {label}
     </span>
   );
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
