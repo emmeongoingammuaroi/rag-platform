@@ -86,6 +86,12 @@ class Settings(BaseSettings):
     RERANKER_TOP_K: int = 5
     RETRIEVER_INITIAL_TOP_K: int = 20
     HYDE_ENABLED: bool = False
+    QUERY_REWRITER_ENABLED: bool = False
+    BM25_ENABLED: bool = False
+    BM25_WEIGHT: float = 0.3
+    VECTOR_WEIGHT: float = 0.7
+    CONTEXT_MAX_TOKENS: int = 3000
+    CONTEXT_HISTORY_TURNS: int = 6
 
     # OCR
     OCR_ENABLED: bool = False

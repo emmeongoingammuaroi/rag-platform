@@ -45,7 +45,10 @@ app/
 - **Document processing** → `app/tasks/ingestion.py` (Celery tasks) calling `app/rag/ingest.py` (orchestrator)
 - **Text chunking** → `app/rag/chunker.py`
 - **Embeddings** → `app/rag/embedder.py` (OpenAI embedding wrapper)
-- **RAG retrieval** → `app/rag/retriever.py` (embed query → vector search → format context)
+- **RAG retrieval** → `app/rag/retriever.py` (embed query → vector search → [BM25 hybrid] → [rerank])
+- **Query rewriting** → `app/rag/query_rewriter.py` (contextualize multi-turn queries)
+- **BM25 keyword search** → `app/rag/bm25.py` (in-memory BM25 index + RRF fusion)
+- **Context assembly** → `app/rag/context_builder.py` (token-budgeted context + history trimming)
 - **Text extraction (PDF/DOCX/TXT)** → `app/utils/document_extractor.py` (PyMuPDF + pdfplumber tables + OCR)
 - **Object storage (S3/MinIO)** → `app/utils/storage.py` (boto3 client, lazy init)
 - **LLM chat** → `app/services/llm.py` (chat completions + streaming only)
@@ -114,7 +117,10 @@ upload → dedup (SHA-256) → store in MinIO → Celery task:
 
 ### Retrieval (current)
 ```
-query → [HyDE expand] → embed → Qdrant search (filtered by user_id, top-20) → [rerank] → top-5 → inject as context → LLM generate
+query → [query rewrite (contextualize)] → embed ──────────┐
+                                         [HyDE optional]   ├── RRF fusion → [rerank] → top-5
+query → [query rewrite] → BM25 keyword search ────────────┘
+  → context builder (system + docs w/ metadata + history, per-section token budget) → LLM generate
 ```
 
 - **PDF extraction:** PyMuPDF for text + pdfplumber for table extraction (markdown tables).
@@ -124,7 +130,9 @@ query → [HyDE expand] → embed → Qdrant search (filtered by user_id, top-20
 - **Embedder:** OpenAI text-embedding-3-small (1536d).
 - **Reranker:** Cross-encoder `ms-marco-MiniLM-L-6-v2`. Toggle: `RERANKER_ENABLED=true|false` (default: off).
 - **HyDE:** LLM generates hypothetical answer → embed that instead of raw query. Toggle: `HYDE_ENABLED=true|false` (default: off). Fallback to raw embed on failure.
-- **Hybrid search:** Not yet implemented (Phase 3.4)
+- **Query Rewriter:** Rewrites multi-turn follow-up questions into standalone form using LLM. Toggle: `QUERY_REWRITER_ENABLED=true|false` (default: off). Fallback to raw query on failure.
+- **BM25 Hybrid Search:** Keyword search via BM25 + Reciprocal Rank Fusion with vector results. Toggle: `BM25_ENABLED=true|false` (default: off). Weights: `BM25_WEIGHT=0.3`, `VECTOR_WEIGHT=0.7`.
+- **Context Builder:** Structured context assembly with token budget (`CONTEXT_MAX_TOKENS=3000`) and history trimming (`CONTEXT_HISTORY_TURNS=6`).
 
 ---
 
@@ -166,6 +174,12 @@ RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
 RERANKER_TOP_K=5
 RETRIEVER_INITIAL_TOP_K=20
 HYDE_ENABLED=false
+QUERY_REWRITER_ENABLED=false
+BM25_ENABLED=false
+BM25_WEIGHT=0.3
+VECTOR_WEIGHT=0.7
+CONTEXT_MAX_TOKENS=3000
+CONTEXT_HISTORY_TURNS=6
 
 # OCR
 OCR_ENABLED=false
@@ -207,7 +221,6 @@ backend/                — Python/FastAPI backend
   alembic/             — DB migrations
   tests/               — pytest
   Dockerfile
-  requirements.txt     — kept for Docker pip install (mirrors pyproject.toml)
   pyproject.toml       — PEP 621 deps, ruff, mypy, pytest config
   Makefile             — backend-specific commands (lint, test, run)
 

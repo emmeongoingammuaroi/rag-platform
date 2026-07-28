@@ -13,7 +13,9 @@ from app.api.deps import get_current_active_user
 from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.models.user import User
-from app.rag.retriever import format_context, retrieve
+from app.rag.context_builder import build_context
+from app.rag.query_rewriter import rewrite_query
+from app.rag.retriever import retrieve
 from app.schemas.conversation import (
     Conversation,
     ConversationCreate,
@@ -183,22 +185,42 @@ async def send_message(
     )
 
     history = await ConversationService.list_messages(db, conversation_id=conversation_id)
-    messages = [{"role": m.role, "content": m.content} for m in history]
+    chat_history = [{"role": m.role, "content": m.content} for m in history]
 
-    search_results = await retrieve(query=msg_in.content, user_id=current_user.id)
-    context = format_context(search_results)
-    if context:
-        messages.insert(
-            0,
-            {
-                "role": "system",
-                "content": (
-                    f"Use the following context to answer the user's question:\n\n{context}"
-                ),
-            },
-        )
+    standalone_query = await rewrite_query(query=msg_in.content, chat_history=chat_history)
+
+    search_results = await retrieve(query=standalone_query, user_id=current_user.id)
+
+    messages = build_context(retrieved_chunks=search_results, chat_history=chat_history)
 
     response = await llm_service.chat_completion(messages=messages)
+
+    logger.info(
+        "rag_pipeline",
+        extra={
+            "pipeline": {
+                "conversation_id": str(conversation_id),
+                "user_id": str(current_user.id),
+                "original_query": msg_in.content,
+                "rewritten_query": standalone_query,
+                "query_was_rewritten": standalone_query != msg_in.content,
+                "retrieval_count": len(search_results),
+                "sources": [
+                    {
+                        "document_id": (r.get("payload") or {}).get("document_id"),
+                        "title": (r.get("payload") or {}).get("title"),
+                        "chunk_index": (r.get("payload") or {}).get("chunk_index"),
+                        "score": r.get("score"),
+                    }
+                    for r in search_results
+                ],
+                "context_messages": len(messages),
+                "model": response.get("model"),
+                "input_tokens": response.get("usage", {}).get("prompt_tokens"),
+                "output_tokens": response.get("usage", {}).get("completion_tokens"),
+            }
+        },
+    )
 
     assistant_message = await ConversationService.add_message(
         db,

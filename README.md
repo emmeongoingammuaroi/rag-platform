@@ -1,25 +1,26 @@
 # RAG Platform
 
-Production-ready Retrieval-Augmented Generation platform. Upload documents, chat with AI that retrieves relevant context from your files.
+Production-oriented Retrieval-Augmented Generation platform. Upload documents, chat with AI that retrieves relevant context from your files.
 
 ## Stack
 
-| Layer           | Tech                                          |
-| --------------- | --------------------------------------------- |
-| API             | Python 3.12, FastAPI, Pydantic v2             |
-| Database        | PostgreSQL, SQLAlchemy 2.0 (async)            |
-| Background Jobs | Redis, Celery                                 |
-| Vector DB       | Qdrant                                        |
-| Object Storage  | MinIO (S3-compatible) — local & prod          |
-| LLM             | OpenAI (gpt-4o-mini, text-embedding-3-small)  |
-| PDF/OCR         | PyMuPDF, pdfplumber (tables), Tesseract (OCR) |
-| Auth            | FastAPI-Users (JWT)                           |
-| Frontend        | Vite + React + TypeScript + Tailwind          |
+| Layer | Tech |
+| ----- | ---- |
+| API | Python 3.12, FastAPI, Pydantic v2 |
+| Database | PostgreSQL, SQLAlchemy 2.0 (async) |
+| Background Jobs | Redis, Celery |
+| Retrieval | Qdrant (vector) + rank-bm25 (in-memory keyword) + RRF |
+| Reranker | sentence-transformers CrossEncoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`) |
+| Object Storage | MinIO (local) / AWS S3 (production) — same S3 interface |
+| LLM | OpenAI API (configurable chat + embedding models) |
+| PDF/OCR | PyMuPDF, pdfplumber (tables), Tesseract (OCR) |
+| Auth | FastAPI-Users (JWT) |
+| Frontend | Vite + React + TypeScript + Tailwind |
 
 ## Quick Start
 
 ```bash
-# Clone and start all services (7 containers)
+# Clone and start all services
 docker compose up
 
 # API:          http://localhost:8010
@@ -87,17 +88,20 @@ graph LR
 
 ```mermaid
 graph LR
-    Q[User Query] --> H{HyDE?}
-    H -->|Yes| H1[LLM Hypothetical Answer]
-    H1 --> E[Embed]
-    H -->|No| E
-    E --> V[Qdrant Search top-20]
-    V --> R{Rerank?}
+    Q[User Query + History] --> QR[Query Rewriter]
+    QR --> E[Embed Query]
+    QR -.->|optional| H1[HyDE: LLM Hypothetical]
+    H1 -.-> E
+    E --> V[Qdrant Vector Search]
+    QR --> BM[BM25 Keyword Search]
+    V --> RRF[RRF Fusion]
+    BM --> RRF
+    RRF --> R{Rerank?}
     R -->|Yes| R1[Cross-Encoder top-5]
     R -->|No| T[top-5]
-    R1 --> C[Context Injection]
-    T --> C
-    C --> L[LLM Generate]
+    R1 --> CB[Context Builder]
+    T --> CB
+    CB --> L[LLM Generate]
 ```
 
 ### Project Structure
@@ -177,8 +181,11 @@ GET    /ready                         — readiness (DB + Redis + Qdrant)
 
 ```text
 Ingest:  upload → dedup (SHA-256) → store in MinIO → extract (PyMuPDF + tables + OCR)
-         → semantic chunk → incremental embed (only changed chunks) → upsert to Qdrant
-Chat:    query → [HyDE] → embed → vector search (user-scoped, top-20) → [rerank] → top-5 → LLM generate
+         → recursive sentence-aware chunk → incremental embed (only changed) → Qdrant upsert
+Chat:    query → rewrite ─────→ embed [→ HyDE optional] → vector top-20 ──┐
+                          └──→ BM25 top-20 ────────────────────────────────┘
+                                       ↓
+                                 RRF fusion → [rerank top-20 → top-5] → context builder → LLM
 ```
 
 | Stage | Technique | Toggle |
@@ -188,8 +195,11 @@ Chat:    query → [HyDE] → embed → vector search (user-scoped, top-20) → 
 | Deduplication | SHA-256 file hash, chunk-level incremental re-index | Always on |
 | Chunking | Recursive sentence-aware splitter (512 chars, 50 overlap) | Always on |
 | Embedding | OpenAI text-embedding-3-small (1536d) | Always on |
+| Query Rewriter | LLM contextualizes multi-turn follow-ups into standalone queries | `QUERY_REWRITER_ENABLED` |
 | HyDE | LLM generates hypothetical answer → embed that | `HYDE_ENABLED` |
-| Reranker | Cross-encoder ms-marco-MiniLM-L-6-v2 (top-20 → top-5) | `RERANKER_ENABLED` |
+| BM25 Hybrid | Keyword search + Reciprocal Rank Fusion with vector results | `BM25_ENABLED` |
+| Reranker | Cross-encoder `cross-encoder/ms-marco-MiniLM-L-6-v2` (top-20 → top-5) | `RERANKER_ENABLED` |
+| Context Builder | Token-budgeted context assembly + conversation history trimming | Always on |
 
 ## Evaluation
 
@@ -232,7 +242,18 @@ Configure via `OBSERVABILITY_PROVIDER`: `json` (structured logs) or `none` (disa
 
 ## AWS Deployment
 
-Terraform-managed infrastructure on AWS (ECS Fargate). Estimated cost: ~$0.17/hr.
+Terraform-managed infrastructure on AWS (ECS Fargate).
+
+Estimated infrastructure cost: ~$0.17/hr under the selected low-volume configuration. Actual cost varies by region, traffic, and storage. OpenAI API costs excluded.
+
+| Service | Spec | ~Cost/hr |
+| ------- | ---- | -------- |
+| ECS Fargate (API + Worker + Web) | 3 × 0.25 vCPU / 0.5 GB | $0.09 |
+| RDS PostgreSQL | db.t3.micro | $0.02 |
+| ElastiCache Redis | cache.t3.micro | $0.02 |
+| ALB | base + LCU usage | $0.03 |
+| S3 + ECR | storage (usage-based) | $0.01 |
+| Qdrant Cloud | free tier | $0.00 |
 
 ```bash
 # One-time: create Terraform state backend (S3 + DynamoDB)
@@ -280,7 +301,8 @@ alembic upgrade head
 | `REDIS_URL`              | Redis connection                | required                |
 | `SECRET_KEY`             | JWT signing key                 | required                |
 | `OPENAI_API_KEY`         | OpenAI API key                  | required                |
-| `OPENAI_MODEL`           | Chat model                      | `gpt-4o-mini`           |
+| `OPENAI_MODEL`           | Chat completion model           | `gpt-4o-mini`           |
+| `OPENAI_EMBEDDING_MODEL` | Embedding model                 | `text-embedding-3-small`|
 | `QDRANT_URL`             | Qdrant endpoint                 | `http://localhost:6333` |
 | `S3_ENDPOINT_URL`        | MinIO/S3 endpoint               | `http://minio:9000`     |
 | `S3_ACCESS_KEY`          | MinIO/S3 access key             | `minioadmin`            |
@@ -290,6 +312,10 @@ alembic upgrade head
 | `OCR_LANGUAGE`           | Tesseract language pack         | `eng`                   |
 | `RERANKER_ENABLED`       | Enable cross-encoder reranking  | `false`                 |
 | `HYDE_ENABLED`           | Enable HyDE query expansion     | `false`                 |
+| `QUERY_REWRITER_ENABLED` | Enable multi-turn query rewrite | `false`                 |
+| `BM25_ENABLED`           | Enable BM25 hybrid search       | `false`                 |
+| `CONTEXT_MAX_TOKENS`     | Max tokens for retrieved context| `3000`                  |
+| `CONTEXT_HISTORY_TURNS`  | Conversation turns to keep      | `6`                     |
 | `RATE_LIMIT_PER_MINUTE`  | Per-IP rate limit               | `60`                    |
 | `OBSERVABILITY_PROVIDER` | Tracing provider (`json`/`none`)| `json`                  |
 | `MAX_UPLOAD_SIZE_MB`     | Max file upload size            | `20`                    |
@@ -302,13 +328,29 @@ alembic upgrade head
 | **Qdrant** over Pinecone/Weaviate | Open-source, self-hosted, native filtering by payload fields (user isolation), no vendor lock-in |
 | **Celery + Redis** for async | Document ingestion is CPU/IO-heavy (extraction, OCR, embedding API calls). Keeps API response times fast |
 | **FastAPI-Users** over custom auth | Production-grade JWT auth with verify/reset flows out of the box. No custom security code to audit |
-| **MinIO (S3-compatible)** | Same code path for local dev and production AWS S3. No filesystem dependency in containers |
+| **MinIO (local) / S3 (prod)** | Same S3-compatible interface for both environments. No filesystem dependency, no code changes between local and production |
 | **Recursive chunking** over fixed-size | Respects sentence/paragraph boundaries. Better retrieval quality than naive character splitting |
 | **Two-stage retrieval** (bi-encoder + cross-encoder) | Bi-encoder is fast but imprecise. Cross-encoder reranking on top-20 candidates improves precision significantly |
-| **HyDE** | Short queries match poorly against long documents. Generating a hypothetical answer bridges the semantic gap |
+| **Hybrid retrieval** (vector + BM25) | Semantic search misses exact keyword matches (names, IDs, codes). BM25 catches them. RRF fusion combines both without tuning weights. BM25 index is rebuilt per-query from Qdrant (suitable for per-user corpus sizes; not designed for 100k+ doc scale) |
+| **HyDE** (optional) | Short queries match poorly against long documents. Generating a hypothetical answer bridges the semantic gap. Disabled by default due to latency/cost tradeoff |
 | **Incremental re-indexing** | Only re-embed changed chunks on document update. Saves embedding API costs and processing time |
-| **User-scoped vector search** | Mandatory `user_id` filter on every Qdrant query. Prevents cross-tenant data leakage |
+| **Per-user data isolation** | Enforced at two layers: PostgreSQL ownership checks on all document/conversation queries + mandatory `user_id` filter on every Qdrant vector search. No cross-tenant data leakage |
 | **Structured JSON tracing** | Lightweight observability without external dependencies. Each RAG span (embed, search, rerank, generate) logged with latency and scores |
+
+## Production Considerations
+
+- JWT authentication + per-user authorization on all endpoints
+- Document ownership enforced at both PostgreSQL and Qdrant layers
+- Rate limiting per IP (configurable via `slowapi` + Redis backend)
+- Async document ingestion via Celery — API never blocks on heavy processing
+- Idempotent ingestion: SHA-256 file dedup + chunk-level hash comparison for incremental re-indexing
+- Document state machine: `pending → processing → ready | failed`
+- Health (`/health`) and readiness (`/ready`) endpoints verifying DB, Redis, and Qdrant
+- Structured RAG pipeline tracing: every stage logged with latency, token counts, and retrieval scores
+- Full pipeline observability: original query, rewritten query, retrieved sources, and LLM usage logged per request
+- Configurable retrieval pipeline via feature flags — no code changes needed to enable/disable stages
+- Dockerized local development matching production topology
+- Terraform-managed AWS deployment with CI/CD via GitHub Actions
 
 ## Frontend
 
